@@ -7,6 +7,7 @@
 <link rel="icon" type="image/png" href="Logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   :root{
     --royal:#8B0000;
@@ -79,15 +80,16 @@
   .card{background:#FBF1F1;border-radius:10px;padding:20px;margin-bottom:18px;}
   .hero{
     background:
-      linear-gradient(rgba(20,8,10,0.62), rgba(20,8,10,0.62)),
-      url('church-image.jpg') center/cover no-repeat;
+      linear-gradient(rgba(139,0,0,0.55), rgba(139,0,0,0.72)),
+      url('Logo.png') center/min(60%,340px) no-repeat,
+      linear-gradient(135deg,#7A0000,#5C0000);
     color:var(--white);
     border-radius:14px;padding:36px 28px;margin-bottom:24px;position:relative;overflow:hidden;
     text-align:center;
   }
-  .hero h2{color:var(--white);font-size:28px;font-weight:700;position:relative;text-shadow:0 2px 8px rgba(0,0,0,0.45);}
-  .hero p{color:rgba(255,255,255,0.92);font-weight:400;max-width:560px;position:relative;margin:0 auto;text-shadow:0 1px 4px rgba(0,0,0,0.4);}
-  .hero .verse{color:var(--gold-light);font-weight:600;margin-top:14px;font-size:14px;position:relative;text-shadow:0 1px 4px rgba(0,0,0,0.4);}
+  .hero h2{color:var(--white);font-size:28px;font-weight:700;position:relative;text-shadow:0 2px 10px rgba(0,0,0,0.55);}
+  .hero p{color:rgba(255,255,255,0.95);font-weight:400;max-width:560px;position:relative;margin:0 auto;text-shadow:0 1px 6px rgba(0,0,0,0.5);}
+  .hero .verse{color:var(--gold-light);font-weight:600;margin-top:14px;font-size:14px;position:relative;text-shadow:0 1px 6px rgba(0,0,0,0.5);}
   .hero .btn.outline{color:var(--white);border-color:var(--white);}
 
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px;}
@@ -205,20 +207,258 @@
 </div>
 
 <script>
-/* ---------------- STORAGE HELPERS ---------------- */
-async function sGet(key, shared=true){
-  try{ const r = await window.storage.get(key, shared); return r ? JSON.parse(r.value) : null; }
+/* ---------------- SUPABASE CONFIG ----------------
+   1. Create a free project at https://supabase.com
+   2. In the SQL editor, run the script from supabase_setup.sql (provided alongside this file)
+   3. Paste your Project URL and anon public API key below (Settings -> API in Supabase)
+------------------------------------------------------ */
+const SUPABASE_URL = 'YOUR_SUPABASE_PROJECT_URL';
+const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+const supabaseClient = (SUPABASE_URL.startsWith('http'))
+  ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+  : null;
+
+/* ---------------- DATA LAYER ----------------
+   Each part of the app (settings, users, visitors, follow ups,
+   testimonies, counselling, attendance, meetings, absences) has its
+   own real Postgres table (see supabase_setup.sql) instead of one
+   catch-all key/value table. When Supabase isn't configured yet,
+   the same functions fall back to local per-entity demo storage so
+   the app still works out of the box. ------------------------------ */
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,8); }
+
+// local (non-Supabase) fallback, kept as separate named "tables" rather than one blob
+async function localGet(table){
+  try{ const r = await window.storage.get('table:'+table, true); return r ? JSON.parse(r.value) : null; }
   catch(e){ return null; }
 }
-async function sSet(key, value, shared=true){
-  try{ return await window.storage.set(key, JSON.stringify(value), shared); }
-  catch(e){ console.error('storage set failed', e); return null; }
+async function localSet(table, value){
+  try{ return await window.storage.set('table:'+table, JSON.stringify(value), true); }
+  catch(e){ console.error('local storage set failed', e); return null; }
 }
-async function sList(prefix, shared=true){
-  try{ const r = await window.storage.list(prefix, shared); return r ? r.keys : []; }
-  catch(e){ return []; }
+async function localAll(table){ return (await localGet(table)) || []; }
+async function localInsert(table, row){
+  const rows = await localAll(table);
+  rows.push(row);
+  await localSet(table, rows);
+  return row;
 }
-function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,8); }
+async function localUpsert(table, row, keyField='id'){
+  const rows = await localAll(table);
+  const i = rows.findIndex(r=>r[keyField]===row[keyField]);
+  if(i>-1) rows[i] = row; else rows.push(row);
+  await localSet(table, rows);
+  return row;
+}
+
+/* ---------- SETTINGS ---------- */
+async function dbGetSettings(){
+  if(supabaseClient){
+    const { data, error } = await supabaseClient.from('settings').select('*').eq('id',1).maybeSingle();
+    if(error || !data) return null;
+    return { teacherName:data.teacher_name, teacherPhone:data.teacher_phone, churchLat:data.church_lat, churchLng:data.church_lng, meetingsOpen:data.meetings_open||{}, checkinLabel:data.checkin_label||'' };
+  }
+  return await localGet('settings');
+}
+async function dbSaveSettings(s){
+  if(supabaseClient){
+    const { error } = await supabaseClient.from('settings').upsert({ id:1, teacher_name:s.teacherName, teacher_phone:s.teacherPhone, church_lat:s.churchLat, church_lng:s.churchLng, meetings_open:s.meetingsOpen, checkin_label:s.checkinLabel }, { onConflict:'id' });
+    if(error) console.error('save settings failed', error);
+    return;
+  }
+  await localSet('settings', s);
+}
+
+/* ---------- USERS ---------- */
+function rowToUser(r){ return { id:r.id, name:r.name, phone:r.phone, email:r.email||'', password:r.password, role:r.role, groups:r.groups||[] }; }
+function userToRow(u){ return { id:u.id, name:u.name, phone:u.phone, email:u.email||null, password:u.password, role:u.role, groups:u.groups||[] }; }
+async function dbGetUsers(){
+  if(supabaseClient){
+    const { data, error } = await supabaseClient.from('users').select('*').order('created_at',{ascending:true});
+    if(error || !data) return [];
+    return data.map(rowToUser);
+  }
+  return await localAll('users');
+}
+async function dbSaveUser(u){
+  if(supabaseClient){
+    const { error } = await supabaseClient.from('users').upsert(userToRow(u), { onConflict:'id' });
+    if(error) console.error('save user failed', error);
+    return;
+  }
+  await localUpsert('users', u);
+}
+
+/* ---------- VISITORS ---------- */
+function rowToVisitor(r){
+  return { id:r.id, name:r.name, phone:r.phone, email:r.email||'', gender:r.gender||'', maritalStatus:r.marital_status||'', maritalOther:r.marital_other||'',
+    how:r.how_heard||'', howOther:r.how_other||'', inviter:r.inviter||'', born:r.born_again||'', enjoyed:r.enjoyed||'', address:r.address||'',
+    joinInterest:r.join_interest||'', joinOther:r.join_other||'', prayer:r.prayer||'', intent:r.intent||'visitor', followedUp:!!r.followed_up, submittedAt:r.submitted_at };
+}
+function visitorToRow(v){
+  return { id:v.id, name:v.name, phone:v.phone, email:v.email||null, gender:v.gender||null, marital_status:v.maritalStatus||null, marital_other:v.maritalOther||null,
+    how_heard:v.how||null, how_other:v.howOther||null, inviter:v.inviter||null, born_again:v.born||null, enjoyed:v.enjoyed||null, address:v.address||null,
+    join_interest:v.joinInterest||null, join_other:v.joinOther||null, prayer:v.prayer||null, intent:v.intent||'visitor', followed_up:!!v.followedUp, submitted_at:v.submittedAt };
+}
+async function dbAddVisitor(v){
+  if(supabaseClient){
+    const { error } = await supabaseClient.from('visitors').insert(visitorToRow(v));
+    if(error) console.error('save visitor failed', error);
+    return;
+  }
+  await localInsert('visitors', v);
+}
+async function dbGetVisitors(){
+  if(supabaseClient){
+    const { data, error } = await supabaseClient.from('visitors').select('*').order('submitted_at',{ascending:false});
+    if(error || !data) return [];
+    return data.map(rowToVisitor);
+  }
+  const rows = await localAll('visitors');
+  return rows.slice().sort((a,b)=>new Date(b.submittedAt)-new Date(a.submittedAt));
+}
+
+/* ---------- FOLLOW UPS ---------- */
+async function dbGetFollowups(visitorId){
+  if(supabaseClient){
+    const { data, error } = await supabaseClient.from('followups').select('*').eq('visitor_id',visitorId).order('created_at',{ascending:false});
+    if(error || !data) return [];
+    return data.map(r=>({byId:r.by_id, byName:r.by_name, notes:r.notes, date:r.created_at}));
+  }
+  const rows = await localAll('followups');
+  return rows.filter(r=>r.visitorId===visitorId).sort((a,b)=>new Date(b.date)-new Date(a.date));
+}
+async function dbAddFollowup(visitorId, entry){
+  if(supabaseClient){
+    const { error } = await supabaseClient.from('followups').insert({ visitor_id:visitorId, by_id:entry.byId, by_name:entry.byName, notes:entry.notes });
+    if(error) console.error('save followup failed', error);
+    return;
+  }
+  await localInsert('followups', Object.assign({visitorId}, entry));
+}
+
+/* ---------- TESTIMONIES ---------- */
+function rowToTestimony(r){ return { id:r.id, authorId:r.author_id, authorName:r.author_name, text:r.body, status:r.status, submittedAt:r.submitted_at }; }
+async function dbGetTestimonies(){
+  if(supabaseClient){
+    const { data, error } = await supabaseClient.from('testimonies').select('*').order('submitted_at',{ascending:false});
+    if(error || !data) return [];
+    return data.map(rowToTestimony);
+  }
+  const rows = await localAll('testimonies');
+  return rows.slice().sort((a,b)=>new Date(b.submittedAt)-new Date(a.submittedAt));
+}
+async function dbAddTestimony(t){
+  if(supabaseClient){
+    const { error } = await supabaseClient.from('testimonies').insert({ id:t.id, author_id:t.authorId, author_name:t.authorName, body:t.text, status:t.status });
+    if(error) console.error('save testimony failed', error);
+    return;
+  }
+  await localInsert('testimonies', t);
+}
+async function dbSetTestimonyStatus(id, status){
+  if(supabaseClient){
+    const { error } = await supabaseClient.from('testimonies').update({status}).eq('id',id);
+    if(error) console.error('update testimony failed', error);
+    return;
+  }
+  const rows = await localAll('testimonies');
+  const t = rows.find(r=>r.id===id);
+  if(t){ t.status = status; await localSet('testimonies', rows); }
+}
+
+/* ---------- COUNSELLING ---------- */
+function rowToCounselling(r){ return { id:r.id, userId:r.user_id, name:r.name, when:r.when_text, note:r.note||'', status:r.status, date:r.created_at }; }
+async function dbGetCounselling(){
+  if(supabaseClient){
+    const { data, error } = await supabaseClient.from('counselling_requests').select('*').order('created_at',{ascending:false});
+    if(error || !data) return [];
+    return data.map(rowToCounselling);
+  }
+  const rows = await localAll('counselling');
+  return rows.slice().sort((a,b)=>new Date(b.date)-new Date(a.date));
+}
+async function dbAddCounselling(c){
+  if(supabaseClient){
+    const { error } = await supabaseClient.from('counselling_requests').insert({ id:c.id, user_id:c.userId, name:c.name, when_text:c.when, note:c.note||null, status:c.status });
+    if(error) console.error('save counselling failed', error);
+    return;
+  }
+  await localInsert('counselling', c);
+}
+async function dbConfirmCounselling(id){
+  if(supabaseClient){
+    const { error } = await supabaseClient.from('counselling_requests').update({status:'confirmed'}).eq('id',id);
+    if(error) console.error('confirm counselling failed', error);
+    return;
+  }
+  const rows = await localAll('counselling');
+  const c = rows.find(r=>r.id===id);
+  if(c){ c.status = 'confirmed'; await localSet('counselling', rows); }
+}
+
+/* ---------- ATTENDANCE (Sunday service) ---------- */
+async function dbGetAttendance(dateKey){
+  if(supabaseClient){
+    const { data, error } = await supabaseClient.from('attendance').select('*').eq('service_date',dateKey);
+    if(error || !data) return [];
+    return data.map(r=>({userId:r.user_id, name:r.name, time:r.checked_in_at, distance:r.distance_meters}));
+  }
+  const rows = await localAll('attendance');
+  return rows.filter(r=>r.dateKey===dateKey);
+}
+async function dbAddAttendance(dateKey, entry){
+  if(supabaseClient){
+    const { error } = await supabaseClient.from('attendance').insert({ service_date:dateKey, user_id:entry.userId, name:entry.name, distance_meters:entry.distance });
+    if(error) console.error('save attendance failed', error);
+    return;
+  }
+  await localInsert('attendance', Object.assign({dateKey}, entry));
+}
+
+/* ---------- GROUP MEETING ATTENDANCE ---------- */
+async function dbGetMeetingAttendance(group, dateKey){
+  if(supabaseClient){
+    const { data, error } = await supabaseClient.from('meeting_attendance').select('*').eq('group_name',group).eq('meeting_date',dateKey);
+    if(error || !data) return [];
+    return data.map(r=>({userId:r.user_id, name:r.name, time:r.checked_in_at}));
+  }
+  const rows = await localAll('meeting_attendance');
+  return rows.filter(r=>r.group===group && r.dateKey===dateKey);
+}
+async function dbAddMeetingAttendance(group, dateKey, entry){
+  if(supabaseClient){
+    const { error } = await supabaseClient.from('meeting_attendance').insert({ group_name:group, meeting_date:dateKey, user_id:entry.userId, name:entry.name });
+    if(error) console.error('save meeting attendance failed', error);
+    return;
+  }
+  await localInsert('meeting_attendance', Object.assign({group, dateKey}, entry));
+}
+
+/* ---------- ABSENCES ---------- */
+function rowToAbsence(r){ return { id:r.id, text:r.body, authorId:r.author_id, authorName:r.author_name, date:r.created_at }; }
+async function dbGetAbsences(){
+  if(supabaseClient){
+    const { data, error } = await supabaseClient.from('absences').select('*').order('created_at',{ascending:false});
+    if(error || !data) return [];
+    return data.map(rowToAbsence);
+  }
+  const rows = await localAll('absences');
+  return rows.slice().sort((a,b)=>new Date(b.date)-new Date(a.date));
+}
+async function dbAddAbsence(a){
+  if(supabaseClient){
+    const { error } = await supabaseClient.from('absences').insert({ id:a.id, body:a.text, author_id:a.authorId, author_name:a.authorName });
+    if(error) console.error('save absence failed', error);
+    return;
+  }
+  await localInsert('absences', a);
+}
+
+/* ---------------- VALIDATION HELPERS ---------------- */
+function isValidEmail(email){
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
 
 /* ---------------- APP STATE ---------------- */
 let CURRENT_USER = null; // {id,name,phone,role,groups}
@@ -242,17 +482,19 @@ let ACTIVE_TAB = 'home';
 
 /* ---------------- INIT ---------------- */
 async function init(){
-  const savedSettings = await sGet('settings');
+  const savedSettings = await dbGetSettings();
   if(savedSettings) SETTINGS = Object.assign(SETTINGS, savedSettings);
-  else await sSet('settings', SETTINGS);
+  else await dbSaveSettings(SETTINGS);
 
   // seed default super admin accounts if none exist yet
-  const users = await sGet('users') || [];
+  const users = await dbGetUsers();
   if(users.length===0){
-    users.push({id:uid(), name:'Pastor', phone:'0720746132', password:'winners2026', role:'super_admin', groups:[]});
-    users.push({id:uid(), name:'Daniel', phone:'0705411249', password:'winners2026', role:'super_admin', groups:[]});
-    users.push({id:uid(), name:'Victor', phone:'0710991722', password:'winners2026', role:'super_admin', groups:[]});
-    await sSet('users', users);
+    const seed = [
+      {id:uid(), name:'Pastor', phone:'0720746132', password:'winners2026', role:'super_admin', groups:[]},
+      {id:uid(), name:'Daniel', phone:'0705411249', password:'winners2026', role:'super_admin', groups:[]},
+      {id:uid(), name:'Victor', phone:'0710991722', password:'winners2026', role:'super_admin', groups:[]}
+    ];
+    for(const u of seed) await dbSaveUser(u);
   }
 
   renderNav();
@@ -401,7 +643,7 @@ function openLogin(){
 async function doLogin(){
   const phone = document.getElementById('loginPhone').value.trim();
   const pass = document.getElementById('loginPass').value;
-  const users = await sGet('users') || [];
+  const users = await dbGetUsers();
   const u = users.find(x=>x.phone===phone && x.password===pass);
   if(!u){
     document.getElementById('loginMsg').innerHTML = '<div class="msg err">Phone or password not recognized.</div>';
@@ -428,6 +670,8 @@ function doOpenSignupModal(){
     <input type="text" id="suName">
     <label>Phone Number</label>
     <input type="tel" id="suPhone">
+    <label>Email Address</label>
+    <input type="email" id="suEmail" placeholder="you@example.com">
     <label>Choose Password</label>
     <input type="password" id="suPass">
     <button class="btn gold" onclick="doSignup()">Create Account</button>
@@ -437,19 +681,27 @@ function doOpenSignupModal(){
 async function doSignup(){
   const name = document.getElementById('suName').value.trim();
   const phone = document.getElementById('suPhone').value.trim();
+  const email = document.getElementById('suEmail').value.trim();
   const pass = document.getElementById('suPass').value;
-  if(!name || !phone || !pass){
-    document.getElementById('signupMsg').innerHTML = '<div class="msg err">Please fill in your name, phone number, and password.</div>';
+  if(!name || !phone || !email || !pass){
+    document.getElementById('signupMsg').innerHTML = '<div class="msg err">Please fill in your name, phone number, email, and password.</div>';
     return;
   }
-  const users = await sGet('users') || [];
+  if(!isValidEmail(email)){
+    document.getElementById('signupMsg').innerHTML = '<div class="msg err">Please enter a valid email address.</div>';
+    return;
+  }
+  const users = await dbGetUsers();
   if(users.find(u=>u.phone===phone)){
     document.getElementById('signupMsg').innerHTML = '<div class="msg err">An account with this phone number already exists. Please log in instead.</div>';
     return;
   }
-  const newUser = {id:uid(), name, phone, password:pass, role:'member', groups: []};
-  users.push(newUser);
-  await sSet('users', users);
+  if(users.find(u=>u.email && u.email.toLowerCase()===email.toLowerCase())){
+    document.getElementById('signupMsg').innerHTML = '<div class="msg err">An account with this email already exists. Please log in instead.</div>';
+    return;
+  }
+  const newUser = {id:uid(), name, phone, email, password:pass, role:'member', groups: []};
+  await dbSaveUser(newUser);
   CURRENT_USER = newUser;
   closeModal();
   renderUserbar();
@@ -535,28 +787,56 @@ function renderVisitorIntake(){
 async function renderVisitorForm(main){
   main.innerHTML = `
     <div class="card">
-      <h2>Welcome, We Are Glad You Are Here</h2>
-      <p style="color:var(--grey)">Please share a few details about yourself. This helps our team welcome you properly and follow up with you in the weeks ahead.</p>
+      <h2>Winners' Chapel International Ruiru &mdash; 1st Timer</h2>
+      <p style="color:var(--grey)">To help us extend our love and care to you, please supply the following information.</p>
       <div id="npMsg"></div>
 
       <label>Full Name</label>
       <input type="text" id="npName">
 
+      <label>Gender</label>
+      <div class="radio-row">
+        <label><input type="radio" name="npGender" value="Male"> Male</label>
+        <label><input type="radio" name="npGender" value="Female"> Female</label>
+      </div>
+
+      <label>Marital Status</label>
+      <div class="radio-row">
+        <label><input type="radio" name="npMarital" value="Single" onchange="toggleMaritalOther()"> Single</label>
+        <label><input type="radio" name="npMarital" value="Married" onchange="toggleMaritalOther()"> Married</label>
+        <label><input type="radio" name="npMarital" value="Other" onchange="toggleMaritalOther()"> Other</label>
+      </div>
+      <div id="npMaritalOtherWrap" style="display:none">
+        <label>Please specify</label>
+        <input type="text" id="npMaritalOther">
+      </div>
+
+      <label>Email Address (optional)</label>
+      <input type="email" id="npEmail" placeholder="you@example.com">
+
       <label>Phone Number</label>
       <input type="tel" id="npPhone">
 
-      <label>How did you come to be with us today?</label>
-      <select id="npHow">
-        <option value="Invited by a member">Invited by a member</option>
-        <option value="Evangelism outreach">Through an evangelism outreach</option>
-        <option value="Walked in">I just walked in</option>
-        <option value="Other">Other</option>
-      </select>
+      <label>Where do you stay?</label>
+      <input type="text" id="npAddress">
 
-      <div id="npInviterWrap">
-        <label>Who invited you? (name of the member, if applicable)</label>
-        <input type="text" id="npInviter" placeholder="Leave blank if not applicable">
+      <label>How did you come to this Church?</label>
+      <div class="radio-row">
+        <label><input type="radio" name="npHow" value="Invitation" onchange="toggleHowOther()"> Invitation</label>
+        <label><input type="radio" name="npHow" value="Friends" onchange="toggleHowOther()"> Friends</label>
+        <label><input type="radio" name="npHow" value="Advert" onchange="toggleHowOther()"> Advert</label>
+        <label><input type="radio" name="npHow" value="On my own" onchange="toggleHowOther()"> On my own</label>
+        <label><input type="radio" name="npHow" value="Relative" onchange="toggleHowOther()"> Relative</label>
+        <label><input type="radio" name="npHow" value="Telephone" onchange="toggleHowOther()"> Telephone</label>
+        <label><input type="radio" name="npHow" value="Other" onchange="toggleHowOther()"> Other</label>
       </div>
+      <div id="npHowOtherWrap" style="display:none">
+        <label>Please specify</label>
+        <input type="text" id="npHowOther">
+      </div>
+
+      <label>Who invited you? (name of the member, if applicable)</label>
+      <input type="text" id="npInviter" placeholder="Leave blank if not applicable">
 
       <label>Are you born again?</label>
       <div class="radio-row">
@@ -565,17 +845,25 @@ async function renderVisitorForm(main){
         <label><input type="radio" name="npBorn" value="Not sure"> Not sure</label>
       </div>
 
-      <label>What did you love most about the service?</label>
-      <div class="check-row">
-        <label><input type="checkbox" name="npLove" value="The Word"> The Word</label>
-        <label><input type="checkbox" name="npLove" value="Praise and Worship"> Praise and Worship</label>
-        <label><input type="checkbox" name="npLove" value="Choir"> Choir</label>
-        <label><input type="checkbox" name="npLove" value="Testimony"> Testimony</label>
-        <label><input type="checkbox" name="npLove" value="Hospitality"> Hospitality</label>
+      <label>What did you enjoy most in the service?</label>
+      <div class="radio-row">
+        <label><input type="radio" name="npEnjoyed" value="Praise"> Praise</label>
+        <label><input type="radio" name="npEnjoyed" value="Message"> Message</label>
+        <label><input type="radio" name="npEnjoyed" value="Prayer session"> Prayer session</label>
+        <label><input type="radio" name="npEnjoyed" value="Reception"> Reception</label>
+        <label><input type="radio" name="npEnjoyed" value="Co-ordinate of service"> Co-ordinate of service</label>
       </div>
 
-      <label>Where do you come from (your home area, or the church you normally attend)?</label>
-      <input type="text" id="npAddress">
+      <label>Would you like to join this church?</label>
+      <div class="radio-row">
+        <label><input type="radio" name="npJoin" value="Yes" onchange="toggleJoinOther()"> Yes</label>
+        <label><input type="radio" name="npJoin" value="No" onchange="toggleJoinOther()"> No</label>
+        <label><input type="radio" name="npJoin" value="Other" onchange="toggleJoinOther()"> Other</label>
+      </div>
+      <div id="npJoinOtherWrap" style="display:none">
+        <label>Please specify</label>
+        <input type="text" id="npJoinOther">
+      </div>
 
       <label>Do you have a prayer request? This is kept strictly confidential and is only seen by the pastor and the leader of the Kingdom Advancement Prayer Squad.</label>
       <textarea id="npPrayer" placeholder="Optional. Share only what you are comfortable sharing."></textarea>
@@ -586,31 +874,57 @@ async function renderVisitorForm(main){
   `;
 }
 
+function toggleMaritalOther(){
+  const v = document.querySelector('input[name=npMarital]:checked');
+  document.getElementById('npMaritalOtherWrap').style.display = (v && v.value==='Other') ? 'block' : 'none';
+}
+function toggleHowOther(){
+  const v = document.querySelector('input[name=npHow]:checked');
+  document.getElementById('npHowOtherWrap').style.display = (v && v.value==='Other') ? 'block' : 'none';
+}
+function toggleJoinOther(){
+  const v = document.querySelector('input[name=npJoin]:checked');
+  document.getElementById('npJoinOtherWrap').style.display = (v && v.value==='Other') ? 'block' : 'none';
+}
+
 async function submitNewPerson(){
   const name = document.getElementById('npName').value.trim();
   const phone = document.getElementById('npPhone').value.trim();
+  const email = document.getElementById('npEmail').value.trim();
   if(!name || !phone){
     document.getElementById('npMsg').innerHTML = '<div class="msg err">Please provide your name and phone number.</div>';
     return;
   }
-  const how = document.getElementById('npHow').value;
+  if(email && !isValidEmail(email)){
+    document.getElementById('npMsg').innerHTML = '<div class="msg err">Please enter a valid email address, or leave it blank.</div>';
+    return;
+  }
+  const genderEl = document.querySelector('input[name=npGender]:checked');
+  const maritalEl = document.querySelector('input[name=npMarital]:checked');
+  const howEl = document.querySelector('input[name=npHow]:checked');
+  const joinEl = document.querySelector('input[name=npJoin]:checked');
+  const enjoyedEl = document.querySelector('input[name=npEnjoyed]:checked');
+
+  const gender = genderEl ? genderEl.value : '';
+  const maritalStatus = maritalEl ? maritalEl.value : '';
+  const maritalOther = document.getElementById('npMaritalOther') ? document.getElementById('npMaritalOther').value.trim() : '';
+  const how = howEl ? howEl.value : '';
+  const howOther = document.getElementById('npHowOther') ? document.getElementById('npHowOther').value.trim() : '';
   const inviter = document.getElementById('npInviter').value.trim();
   const born = document.querySelector('input[name=npBorn]:checked').value;
-  const intent = 'visitor';
-  const loves = Array.from(document.querySelectorAll('input[name=npLove]:checked')).map(i=>i.value);
+  const enjoyed = enjoyedEl ? enjoyedEl.value : '';
   const address = document.getElementById('npAddress') ? document.getElementById('npAddress').value.trim() : '';
+  const joinInterest = joinEl ? joinEl.value : '';
+  const joinOther = document.getElementById('npJoinOther') ? document.getElementById('npJoinOther').value.trim() : '';
   const prayer = document.getElementById('npPrayer') ? document.getElementById('npPrayer').value.trim() : '';
+  const intent = 'visitor';
 
   const record = {
-    id: uid(), name, phone, how, inviter, born, intent, loves, address, prayer,
+    id: uid(), name, phone, email, gender, maritalStatus, maritalOther, how, howOther, inviter, born,
+    enjoyed, address, joinInterest, joinOther, prayer, intent,
     submittedAt: new Date().toISOString(), followedUp: false
   };
-  await sSet('visitors:'+record.id, record);
-
-  // maintain an index list of visitor ids for easy listing
-  const idx = await sGet('visitor_index') || [];
-  idx.push(record.id);
-  await sSet('visitor_index', idx);
+  await dbAddVisitor(record);
 
   {
     document.getElementById('main').innerHTML = `
@@ -662,7 +976,7 @@ async function renderAccount(main){
   main.innerHTML = `
     <div class="card">
       <h2>My Account</h2>
-      <p><strong>${escapeHTML(u.name)}</strong> &middot; ${escapeHTML(u.phone)} &middot; <span class="badge blue">${roleLabel(u.role)}</span></p>
+      <p><strong>${escapeHTML(u.name)}</strong> &middot; ${escapeHTML(u.phone)}${u.email ? ' &middot; '+escapeHTML(u.email) : ''} &middot; <span class="badge blue">${roleLabel(u.role)}</span></p>
       <label>My Service Groups</label>
       <div class="check-row">
         ${GROUPS.map(g=>`<label><input type="checkbox" value="${g}" ${u.groups.includes(g)?'checked':''} onchange="toggleMyGroup('${g.replace(/'/g,"\\'")}')"> ${g}</label>`).join('')}
@@ -680,12 +994,11 @@ async function renderAccount(main){
 }
 
 async function toggleMyGroup(group){
-  const users = await sGet('users') || [];
-  const u = users.find(x=>x.id===CURRENT_USER.id);
+  const u = CURRENT_USER;
   if(!u) return;
   if(u.groups.includes(group)) u.groups = u.groups.filter(g=>g!==group);
   else u.groups.push(group);
-  await sSet('users', users);
+  await dbSaveUser(u);
   CURRENT_USER = u;
 }
 
@@ -693,10 +1006,7 @@ async function submitTestimony(){
   const text = document.getElementById('testimonyText').value.trim();
   if(!text){ document.getElementById('testMsg').innerHTML = '<div class="msg err">Please write something first.</div>'; return; }
   const rec = {id: uid(), authorId: CURRENT_USER.id, authorName: CURRENT_USER.name, text, status:'pending', submittedAt: new Date().toISOString()};
-  await sSet('testimony:'+rec.id, rec);
-  const idx = await sGet('testimony_index') || [];
-  idx.push(rec.id);
-  await sSet('testimony_index', idx);
+  await dbAddTestimony(rec);
   document.getElementById('testMsg').innerHTML = '<div class="msg ok">Thank you. Your testimony has been sent for review.</div>';
   document.getElementById('testimonyText').value='';
 }
@@ -741,10 +1051,8 @@ function refreshCheckinSub(){
 
 async function renderCounselling(main){
   const isPastor = CURRENT_USER.role==='super_admin';
-  const idx = await sGet('counselling_index') || [];
-  let items = (await Promise.all(idx.map(id=>sGet('counselling:'+id)))).filter(Boolean);
+  let items = await dbGetCounselling();
   if(!isPastor) items = items.filter(i=>i.userId===CURRENT_USER.id);
-  items.sort((a,b)=>new Date(b.date)-new Date(a.date));
   main.innerHTML = `
     <div class="card">
       <h3>Book Counselling With The Pastor</h3>
@@ -774,17 +1082,12 @@ async function bookCounselling(){
   const note = document.getElementById('counselNote').value.trim();
   if(!when){ document.getElementById('counselMsg').innerHTML = '<div class="msg err">Please add a preferred day and time.</div>'; return; }
   const rec = {id:uid(), userId:CURRENT_USER.id, name:CURRENT_USER.name, when, note, status:'requested', date:new Date().toISOString()};
-  await sSet('counselling:'+rec.id, rec);
-  const idx = await sGet('counselling_index') || [];
-  idx.push(rec.id);
-  await sSet('counselling_index', idx);
+  await dbAddCounselling(rec);
   refreshCheckinSub();
 }
 
 async function confirmCounselling(id){
-  const rec = await sGet('counselling:'+id);
-  rec.status = 'confirmed';
-  await sSet('counselling:'+id, rec);
+  await dbConfirmCounselling(id);
   refreshCheckinSub();
 }
 
@@ -795,20 +1098,20 @@ async function renderFollowup(main){
     main.innerHTML = `<div class="card"><h2>Follow Up</h2><p>This section is for members of the Follow Up Team or KAPS group. Join that group from My Account if you serve in follow up.</p></div>`;
     return;
   }
-  const ids = await sGet('visitor_index') || [];
-  const visitors = (await Promise.all(ids.map(id=>sGet('visitors:'+id)))).filter(Boolean).sort((a,b)=> new Date(b.submittedAt)-new Date(a.submittedAt));
+  const visitors = await dbGetVisitors();
 
   let rows = '';
   for(const v of visitors){
-    const followups = await sGet('followups:'+v.id) || [];
+    const followups = await dbGetFollowups(v.id);
+    const joinLabel = v.joinInterest==='Yes' ? 'Wants To Join' : (v.joinInterest==='Other' ? (v.joinOther||'Other') : 'Visitor');
     rows += `
       <div class="list-item">
         <div style="display:flex;justify-content:space-between;flex-wrap:wrap">
           <strong>${escapeHTML(v.name)}</strong>
-          <span class="badge ${v.intent==='member'?'gold':'blue'}">${v.intent==='member'?'Wants Membership':'Visitor'}</span>
+          <span class="badge ${v.joinInterest==='Yes'?'gold':'blue'}">${escapeHTML(joinLabel)}</span>
         </div>
-        <div class="meta">Phone: ${escapeHTML(v.phone)} &middot; Invited by: ${escapeHTML(v.inviter||'Not specified')} &middot; Born again: ${escapeHTML(v.born)}</div>
-        <div class="meta">Loved: ${v.loves.join(', ')||'Not specified'} ${v.address? ' &middot; From: '+escapeHTML(v.address):''}</div>
+        <div class="meta">Phone: ${escapeHTML(v.phone)} &middot; ${escapeHTML(v.gender||'-')}${v.maritalStatus ? ', '+escapeHTML(v.maritalStatus==='Other'?(v.maritalOther||'Other'):v.maritalStatus) : ''} &middot; Invited by: ${escapeHTML(v.inviter||'Not specified')} &middot; Born again: ${escapeHTML(v.born||'-')}</div>
+        <div class="meta">Came via: ${escapeHTML(v.how==='Other'?(v.howOther||'Other'):(v.how||'Not specified'))} &middot; Enjoyed most: ${escapeHTML(v.enjoyed||'Not specified')} ${v.address? ' &middot; Stays at: '+escapeHTML(v.address):''}</div>
         <div class="meta">Visited on ${new Date(v.submittedAt).toLocaleDateString()}</div>
         <details style="margin-top:8px">
           <summary style="cursor:pointer;color:var(--royal);font-size:13px">Follow up history (${followups.length})</summary>
@@ -832,17 +1135,14 @@ async function renderFollowup(main){
 async function addFollowup(visitorId){
   const notes = document.getElementById('fu-'+visitorId).value.trim();
   if(!notes) return;
-  const list = await sGet('followups:'+visitorId) || [];
-  list.push({byId: CURRENT_USER.id, byName: CURRENT_USER.name, notes, date: new Date().toISOString()});
-  await sSet('followups:'+visitorId, list);
+  await dbAddFollowup(visitorId, {byId: CURRENT_USER.id, byName: CURRENT_USER.name, notes, date: new Date().toISOString()});
   refreshCheckinSub();
 }
 
 /* ---------------- TESTIMONY (public list + admin approve happens in admin tab) ---------------- */
 async function renderTestimony(main){
-  const ids = await sGet('testimony_index') || [];
-  const items = (await Promise.all(ids.map(id=>sGet('testimony:'+id)))).filter(Boolean);
-  const approved = items.filter(t=>t.status==='approved').sort((a,b)=>new Date(b.submittedAt)-new Date(a.submittedAt));
+  const items = await dbGetTestimonies();
+  const approved = items.filter(t=>t.status==='approved');
   main.innerHTML = `
     <div class="card">
       <h2>Testimonies</h2>
@@ -870,7 +1170,7 @@ function haversineMeters(lat1, lon1, lat2, lon2){
 async function renderAttendance(main){
   if(!requireLogin('Please log in to sign the attendance register.')) return;
   const todayKey = new Date().toISOString().slice(0,10);
-  const record = await sGet('attendance:'+todayKey) || [];
+  const record = await dbGetAttendance(todayKey);
   const already = record.find(r=>r.userId===CURRENT_USER.id);
   main.innerHTML = `
     <div class="card">
@@ -899,10 +1199,9 @@ function tryCheckin(){
     const dist = haversineMeters(pos.coords.latitude, pos.coords.longitude, SETTINGS.churchLat, SETTINGS.churchLng);
     if(dist <= 500){
       const todayKey = new Date().toISOString().slice(0,10);
-      const record = await sGet('attendance:'+todayKey) || [];
+      const record = await dbGetAttendance(todayKey);
       if(!record.find(r=>r.userId===CURRENT_USER.id)){
-        record.push({userId:CURRENT_USER.id, name:CURRENT_USER.name, time:new Date().toISOString(), distance:Math.round(dist)});
-        await sSet('attendance:'+todayKey, record);
+        await dbAddAttendance(todayKey, {userId:CURRENT_USER.id, name:CURRENT_USER.name, distance:Math.round(dist)});
       }
       refreshCheckinSub();
     } else {
@@ -923,7 +1222,7 @@ async function renderMeetings(main){
     const inGroup = CURRENT_USER.groups.includes(g);
     if(!inGroup && !isLeaderOrAdmin) continue;
     const todayKey = new Date().toISOString().slice(0,10);
-    const record = await sGet('meeting_attendance:'+g+':'+todayKey) || [];
+    const record = await dbGetMeetingAttendance(g, todayKey);
     const already = record.find(r=>r.userId===CURRENT_USER.id);
     controls += `
       <div class="list-item">
@@ -948,17 +1247,15 @@ async function renderMeetings(main){
 
 async function toggleMeeting(group){
   SETTINGS.meetingsOpen[group] = !SETTINGS.meetingsOpen[group];
-  await sSet('settings', SETTINGS);
+  await dbSaveSettings(SETTINGS);
   refreshCheckinSub();
 }
 
 async function checkinMeeting(group){
   const todayKey = new Date().toISOString().slice(0,10);
-  const key = 'meeting_attendance:'+group+':'+todayKey;
-  const record = await sGet(key) || [];
+  const record = await dbGetMeetingAttendance(group, todayKey);
   if(!record.find(r=>r.userId===CURRENT_USER.id)){
-    record.push({userId:CURRENT_USER.id, name:CURRENT_USER.name, time:new Date().toISOString()});
-    await sSet(key, record);
+    await dbAddMeetingAttendance(group, todayKey, {userId:CURRENT_USER.id, name:CURRENT_USER.name});
   }
   refreshCheckinSub();
 }
@@ -983,10 +1280,7 @@ async function submitAbsence(){
   const text = document.getElementById('absText').value.trim();
   if(!text) return;
   const rec = {id:uid(), text, authorId: CURRENT_USER.id, authorName: CURRENT_USER.name, date: new Date().toISOString()};
-  await sSet('absence:'+rec.id, rec);
-  const idx = await sGet('absence_index') || [];
-  idx.push(rec.id);
-  await sSet('absence_index', idx);
+  await dbAddAbsence(rec);
   document.getElementById('absMsg').innerHTML = '<div class="msg ok">Thank you, your note has been received.</div>';
   document.getElementById('absText').value = '';
 }
@@ -1048,8 +1342,7 @@ async function renderAdmin(main){
   }
 
   // pending testimonies
-  const tIds = await sGet('testimony_index') || [];
-  const testimonies = (await Promise.all(tIds.map(id=>sGet('testimony:'+id)))).filter(Boolean);
+  const testimonies = await dbGetTestimonies();
   const pending = testimonies.filter(t=>t.status==='pending');
 
   let testimonyBlock = `
@@ -1068,8 +1361,7 @@ async function renderAdmin(main){
 
   // absence notes, only super admin sees author
   let absenceBlock = '';
-  const aIds = await sGet('absence_index') || [];
-  const absences = (await Promise.all(aIds.map(id=>sGet('absence:'+id)))).filter(Boolean).sort((a,b)=>new Date(b.date)-new Date(a.date));
+  const absences = await dbGetAbsences();
   absenceBlock = `
     <div class="card">
       <h3>Absence Notes</h3>
@@ -1085,8 +1377,8 @@ async function renderAdmin(main){
   // prayer requests, confidential
   let prayerBlock = '';
   if(isSuper || CURRENT_USER.groups.includes("KAPS (Kingdom Advancement Prayer Squad)")){
-    const vIds = await sGet('visitor_index') || [];
-    const visitors = (await Promise.all(vIds.map(id=>sGet('visitors:'+id)))).filter(Boolean).filter(v=>v.prayer);
+    const allVisitors = await dbGetVisitors();
+    const visitors = allVisitors.filter(v=>v.prayer);
     prayerBlock = `
       <div class="card">
         <h3>Confidential Prayer Requests</h3>
@@ -1104,7 +1396,7 @@ async function renderAdmin(main){
   // user role management
   let userBlock = '';
   if(isSuper){
-    const users = await sGet('users') || [];
+    const users = await dbGetUsers();
     userBlock = `
       <div class="card">
         <h3>Manage Members</h3>
@@ -1138,26 +1430,22 @@ async function saveSettings(){
   SETTINGS.teacherPhone = document.getElementById('setTeacherPhone').value.trim();
   SETTINGS.churchLat = parseFloat(document.getElementById('setLat').value);
   SETTINGS.churchLng = parseFloat(document.getElementById('setLng').value);
-  await sSet('settings', SETTINGS);
+  await dbSaveSettings(SETTINGS);
   document.getElementById('setMsg').innerHTML = '<div class="msg ok">Settings saved.</div>';
 }
 
 async function approveTestimony(id){
-  const t = await sGet('testimony:'+id);
-  t.status = 'approved';
-  await sSet('testimony:'+id, t);
+  await dbSetTestimonyStatus(id, 'approved');
   renderAdmin(document.getElementById('main'));
 }
 async function rejectTestimony(id){
-  const t = await sGet('testimony:'+id);
-  t.status = 'rejected';
-  await sSet('testimony:'+id, t);
+  await dbSetTestimonyStatus(id, 'rejected');
   renderAdmin(document.getElementById('main'));
 }
 async function changeRole(userId, role){
-  const users = await sGet('users') || [];
+  const users = await dbGetUsers();
   const u = users.find(x=>x.id===userId);
-  if(u){ u.role = role; await sSet('users', users); }
+  if(u){ u.role = role; await dbSaveUser(u); }
   if(CURRENT_USER && CURRENT_USER.id===userId) CURRENT_USER.role = role;
   renderNav();
 }
