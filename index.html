@@ -362,6 +362,28 @@ function openModalHTML(html){
   document.getElementById('modalBg').classList.add('active');
 }
 
+let CONSENT_GIVEN = false;
+let _consentNext = null;
+function requireConsent(next){
+  if(CONSENT_GIVEN){ next(); return; }
+  _consentNext = next;
+  openModalHTML(`
+    <button class="close-x" onclick="closeModal()">&times;</button>
+    <h3>Your Privacy Matters</h3>
+    <p style="font-size:14px;color:var(--grey)">The details you share with us are kept strictly confidential. They are never sold or shared with third parties, and are only used by our church leadership and follow up team to care for you.</p>
+    <label style="display:flex;align-items:flex-start;gap:8px;font-weight:normal;background:#F7E7E8;padding:10px 12px;border-radius:8px;margin-top:12px;">
+      <input type="checkbox" id="consentCheck" style="width:auto;margin-top:3px;" onchange="document.getElementById('consentBtn').disabled=!this.checked">
+      <span>I agree to share my details with Winners Chapel International, Ruiru, under the confidentiality assurance above.</span>
+    </label>
+    <button class="btn gold" id="consentBtn" disabled onclick="agreeConsent()">Agree &amp; Continue</button>
+  `);
+}
+function agreeConsent(){
+  CONSENT_GIVEN = true;
+  closeModal();
+  if(_consentNext){ const n=_consentNext; _consentNext=null; n(); }
+}
+
 function openLogin(){
   openModalHTML(`
     <button class="close-x" onclick="closeModal()">&times;</button>
@@ -393,6 +415,10 @@ async function doLogin(){
 }
 
 function openSignup(){
+  requireConsent(doOpenSignupModal);
+}
+
+function doOpenSignupModal(){
   openModalHTML(`
     <button class="close-x" onclick="closeModal()">&times;</button>
     <h3>Church Member Sign Up</h3>
@@ -500,8 +526,10 @@ async function renderNewPerson(main){
 }
 
 function renderVisitorIntake(){
-  const main = document.getElementById('main');
-  renderVisitorForm(main);
+  requireConsent(()=>{
+    const main = document.getElementById('main');
+    renderVisitorForm(main);
+  });
 }
 
 async function renderVisitorForm(main){
@@ -644,7 +672,6 @@ async function renderAccount(main){
 
     <div class="card">
       <h3>Write Your Testimony</h3>
-      <p style="color:var(--grey);font-size:14px">Your testimony will be reviewed by a super admin before it is published for the church to read.</p>
       <textarea id="testimonyText" placeholder="Share what God has done in your life"></textarea>
       <button class="btn gold" onclick="submitTestimony()">Submit Testimony</button>
       <div id="testMsg"></div>
