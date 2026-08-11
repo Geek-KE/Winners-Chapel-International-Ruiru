@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <style>
   :root{
     --royal:#8B0000;
@@ -234,6 +235,20 @@ const SUPABASE_ANON_KEY = 'sb_publishable_e2-t7du9NSdEnhm3Nlz1pQ_3MCz3TeL';
 const supabaseClient = (SUPABASE_URL.startsWith('http'))
   ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
   : null;
+
+/* ---------------- EMAILJS CONFIG (sign up email verification) ----------------
+   1. Log in at https://dashboard.emailjs.com
+   2. Email Services -> copy your Service ID and paste it below
+   3. Account -> General -> copy your Public Key and paste it below
+   4. Your OTP email template ID is already filled in below (template_l6n7nss).
+      Make sure that template has a "To Email" field set to {{to_email}}, and
+      that its body includes {{passcode}} where the 6-digit code should appear.
+------------------------------------------------------------------------------ */
+const EMAILJS_PUBLIC_KEY = 'OITNhn7sLjm4XLKIu';
+const EMAILJS_SERVICE_ID = 'service_8cm2rsf';
+const EMAILJS_OTP_TEMPLATE_ID = 'template_l6n7nss';
+const emailjsReady = !EMAILJS_PUBLIC_KEY.startsWith('YOUR_') && !EMAILJS_SERVICE_ID.startsWith('YOUR_');
+if(emailjsReady && window.emailjs){ emailjs.init({ publicKey: EMAILJS_PUBLIC_KEY }); }
 
 /* ---------------- DATA LAYER ----------------
    Each part of the app (settings, users, visitors, follow ups,
@@ -644,7 +659,7 @@ function main_alert(text){
 }
 
 /* ---------------- MODAL / AUTH ---------------- */
-function closeModal(){ document.getElementById('modalBg').classList.remove('active'); }
+function closeModal(){ document.getElementById('modalBg').classList.remove('active'); SIGNUP_VERIFIED_EMAIL = null; }
 function openModalHTML(html){
   document.getElementById('modalContent').innerHTML = html;
   document.getElementById('modalBg').classList.add('active');
@@ -652,6 +667,14 @@ function openModalHTML(html){
 
 let CONSENT_GIVEN = false;
 let _consentNext = null;
+
+// Email OTP verification state for the in-progress signup only (cleared whenever
+// the modal is closed, so a fresh verification is required for every attempt).
+let SIGNUP_VERIFIED_EMAIL = null;
+let SIGNUP_OTP = null; // { email, code, expiresAt }
+let _otpResendAt = 0;
+function generateOtpCode(){ return String(Math.floor(100000 + Math.random()*900000)); }
+
 function requireConsent(next){
   if(CONSENT_GIVEN){ next(); return; }
   _consentNext = next;
@@ -703,10 +726,119 @@ async function doLogin(){
 }
 
 function openSignup(){
-  requireConsent(doOpenSignupModal);
+  requireConsent(doOpenEmailVerifyModal);
 }
 
-function doOpenSignupModal(){
+/* ---- EMAIL OTP VERIFICATION (required before account creation) ---- */
+function doOpenEmailVerifyModal(){
+  openModalHTML(`
+    <button class="close-x" onclick="closeModal()">&times;</button>
+    <h3>Verify Your Email</h3>
+    <p style="font-size:13px;color:var(--grey)">To keep member accounts secure, we will send a 6-digit code to your email address. Enter it on the next step to continue creating your account.</p>
+    <div id="otpMsg"></div>
+    <label>Email Address</label>
+    <input type="email" id="otpEmail" placeholder="you@example.com">
+    <button class="btn gold" onclick="sendSignupOtp()">Send Verification Code</button>
+    <p style="margin-top:14px;font-size:13px;">Already have an account? <a href="#" onclick="openLogin();return false;">Log in here</a></p>
+  `);
+}
+
+async function sendSignupOtp(){
+  const email = document.getElementById('otpEmail').value.trim();
+  const msgEl = document.getElementById('otpMsg');
+  if(!isValidEmail(email)){
+    msgEl.innerHTML = '<div class="msg err">Please enter a valid email address.</div>';
+    return;
+  }
+  const users = await dbGetUsers();
+  if(users.find(u=>u.email && u.email.toLowerCase()===email.toLowerCase())){
+    msgEl.innerHTML = '<div class="msg err">An account with this email already exists. <a href="#" onclick="openLogin();return false;" style="color:inherit;font-weight:bold;text-decoration:underline;">Log in instead</a></div>';
+    return;
+  }
+  msgEl.innerHTML = '<div class="msg ok">Sending code&hellip;</div>';
+  const code = generateOtpCode();
+  SIGNUP_OTP = { email, code, expiresAt: Date.now() + 10*60000 }; // valid for 10 minutes
+  if(emailjsReady){
+    try{
+      // several common param name aliases are sent so this works regardless of
+      // which exact variable names your EmailJS template uses internally
+      await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_OTP_TEMPLATE_ID, {
+        to_email: email, email: email, passcode: code, code: code, otp_code: code
+      });
+    }catch(err){
+      msgEl.innerHTML = `<div class="msg err">Could not send the code: ${escapeHTML((err && (err.text||err.message)) || 'please try again.')}</div>`;
+      return;
+    }
+  }
+  _otpResendAt = Date.now() + 30000;
+  showOtpCodeStep(email);
+}
+
+function showOtpCodeStep(email){
+  const safeEmail = email.replace(/'/g, "\\'");
+  openModalHTML(`
+    <button class="close-x" onclick="closeModal()">&times;</button>
+    <h3>Enter Verification Code</h3>
+    <p style="font-size:13px;color:var(--grey)">We sent a 6-digit code to <strong>${escapeHTML(email)}</strong>. Enter it below to continue. The code expires in 10 minutes.</p>
+    ${!emailjsReady ? `<div class="msg ok">Demo mode (EmailJS not configured yet): your code is <strong>${SIGNUP_OTP.code}</strong></div>` : ''}
+    <div id="otpMsg"></div>
+    <label>Verification Code</label>
+    <input type="text" inputmode="numeric" maxlength="6" id="otpCode" placeholder="123456">
+    <button class="btn gold" onclick="verifySignupOtp('${safeEmail}')">Verify Code</button>
+    <p style="margin-top:14px;font-size:13px;"><a href="#" onclick="resendSignupOtp('${safeEmail}');return false;">Resend code</a></p>
+  `);
+}
+
+async function verifySignupOtp(email){
+  const code = document.getElementById('otpCode').value.trim();
+  const msgEl = document.getElementById('otpMsg');
+  if(!code){
+    msgEl.innerHTML = '<div class="msg err">Please enter the code sent to your email.</div>';
+    return;
+  }
+  if(!SIGNUP_OTP || SIGNUP_OTP.email !== email){
+    msgEl.innerHTML = '<div class="msg err">Please request a new code.</div>';
+    return;
+  }
+  if(Date.now() > SIGNUP_OTP.expiresAt){
+    msgEl.innerHTML = '<div class="msg err">This code has expired. Please request a new one.</div>';
+    return;
+  }
+  if(code !== SIGNUP_OTP.code){
+    msgEl.innerHTML = '<div class="msg err">That code was not recognized. Please try again.</div>';
+    return;
+  }
+  SIGNUP_VERIFIED_EMAIL = email;
+  SIGNUP_OTP = null;
+  doOpenSignupModal(email);
+}
+
+async function resendSignupOtp(email){
+  const msgEl = document.getElementById('otpMsg');
+  if(Date.now() < _otpResendAt){
+    const wait = Math.ceil((_otpResendAt - Date.now())/1000);
+    msgEl.innerHTML = `<div class="msg err">Please wait ${wait}s before requesting another code.</div>`;
+    return;
+  }
+  msgEl.innerHTML = '<div class="msg ok">Resending code&hellip;</div>';
+  const code = generateOtpCode();
+  SIGNUP_OTP = { email, code, expiresAt: Date.now() + 10*60000 };
+  if(emailjsReady){
+    try{
+      await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_OTP_TEMPLATE_ID, {
+        to_email: email, email: email, passcode: code, code: code, otp_code: code
+      });
+    }catch(err){
+      msgEl.innerHTML = `<div class="msg err">${escapeHTML((err && (err.text||err.message)) || 'Could not resend the code.')}</div>`;
+      return;
+    }
+  }
+  _otpResendAt = Date.now() + 30000;
+  showOtpCodeStep(email);
+}
+
+function doOpenSignupModal(verifiedEmail){
+  const email = verifiedEmail || SIGNUP_VERIFIED_EMAIL || '';
   openModalHTML(`
     <button class="close-x" onclick="closeModal()">&times;</button>
     <h3>Church Member Sign Up</h3>
@@ -718,7 +850,8 @@ function doOpenSignupModal(){
     <label>Phone Number</label>
     <input type="tel" id="suPhone">
     <label>Email Address</label>
-    <input type="email" id="suEmail" placeholder="you@example.com">
+    <input type="email" id="suEmail" value="${escapeHTML(email)}" ${email ? 'readonly style="background:#F1F1F1;"' : ''} placeholder="you@example.com">
+    ${email ? '<div class="msg ok" style="margin-top:6px;">Email verified &#10003;</div>' : ''}
     <label>Choose Password</label>
     <input type="password" id="suPass">
     <button class="btn gold" onclick="doSignup()">Create Account</button>
@@ -736,6 +869,10 @@ async function doSignup(){
   }
   if(!isValidEmail(email)){
     document.getElementById('signupMsg').innerHTML = '<div class="msg err">Please enter a valid email address.</div>';
+    return;
+  }
+  if(SIGNUP_VERIFIED_EMAIL !== email){
+    document.getElementById('signupMsg').innerHTML = '<div class="msg err">Please verify this email address with the code we sent before creating your account.</div>';
     return;
   }
   const users = await dbGetUsers();
