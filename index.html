@@ -846,7 +846,6 @@ async function renderTestimony(main){
   main.innerHTML = `
     <div class="card">
       <h2>Testimonies</h2>
-      <p style="color:var(--grey);font-size:14px">Approved testimonies from members of our church family.</p>
       ${approved.map(t=>`
         <div class="list-item">
           <strong>${escapeHTML(t.authorName)}</strong>
