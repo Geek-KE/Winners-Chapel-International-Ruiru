@@ -1166,14 +1166,16 @@ async function renderMembership(main){
       </div>
 
       <div class="list-item"><strong>Step 3. Choose Your Service Groups</strong>
-        <p>You will then be welcomed to serve in one or more of our groups: Choir, Sanctuary Keeping, Sunday School Teachers, Security, Crowd Control (CCU), Hospitality, Technical/Media, KAPS (which includes the Follow Up Team), or Joel's Company. You can choose more than one group from your account once you sign up.</p>
+        <p>You will then be welcomed to serve in one or more of our groups: Choir, Sanctuary Keeping, Sunday School Teachers, Security, Crowd Control (CCU), Hospitality, Technical/Media, KAPS (which includes the Follow Up Team), or Joel's Company. ${CURRENT_USER ? 'You can choose more than one group from My Account.' : 'You can choose more than one group from your account once you sign up.'}</p>
       </div>
 
       <div class="list-item"><strong>Step 4. Ongoing Follow Up</strong>
         <p>A member of our follow up team will stay in touch with you by call or message for about three to six months, until you are settled and strong in the church.</p>
       </div>
 
-      <button class="btn gold" onclick="openSignup()">Create Your Member Account</button>
+      ${CURRENT_USER
+        ? `<button class="btn gold" onclick="showTab('account')">Go To My Account</button>`
+        : `<button class="btn gold" onclick="openSignup()">Create Your Member Account</button>`}
     </div>
   `;
 }
@@ -1187,10 +1189,13 @@ async function renderAccount(main){
       <h2>My Account</h2>
       <p><strong>${escapeHTML(u.name)}</strong> &middot; ${escapeHTML(u.phone)}${u.email ? ' &middot; '+escapeHTML(u.email) : ''} &middot; <span class="badge blue">${roleLabel(u.role, u.adminGroup)}</span></p>
       <label>My Service Groups</label>
-      <div class="check-row">
-        ${GROUPS.map(g=>`<label><input type="checkbox" value="${g}" ${u.groups.includes(g)?'checked':''} onchange="toggleMyGroup('${g.replace(/'/g,"\\'")}')"> ${g}</label>`).join('')}
-      </div>
-      <div class="note">Tip: Join the Follow Up Team or KAPS group above if you help with member follow up. This gives you access to the Follow Up tab.</div>
+      <p style="font-size:13px;color:var(--grey);margin-top:-6px;">Hold Ctrl (Windows) or Cmd (Mac) to select more than one group, then press Save.</p>
+      <select id="myGroupsSelect" multiple size="${Math.min(GROUPS.length, 6)}" style="width:100%;padding:8px;border:1px solid var(--line);border-radius:7px;background:#FCFBF7;color:var(--ink);">
+        ${GROUPS.map(g=>`<option value="${escapeHTML(g)}" ${u.groups.includes(g)?'selected':''}>${escapeHTML(g)}</option>`).join('')}
+      </select>
+      <button class="btn" style="margin-top:10px;" onclick="saveMyGroups()">Save Groups</button>
+      <div id="groupsMsg"></div>
+      <div class="note">Tip: Join the Follow Up Team or KAPS group above if you help with member follow up. This gives you access to the Follow Up tab. Being an admin/leader of a group is assigned separately by church leadership, and is limited to one group.</div>
     </div>
 
     <div class="card">
@@ -1202,13 +1207,17 @@ async function renderAccount(main){
   `;
 }
 
-async function toggleMyGroup(group){
+async function saveMyGroups(){
   const u = CURRENT_USER;
   if(!u) return;
-  if(u.groups.includes(group)) u.groups = u.groups.filter(g=>g!==group);
-  else u.groups.push(group);
+  const select = document.getElementById('myGroupsSelect');
+  const chosen = Array.from(select.selectedOptions).map(o=>o.value);
+  u.groups = chosen;
   await dbSaveUser(u);
   CURRENT_USER = u;
+  const msg = document.getElementById('groupsMsg');
+  if(msg) msg.innerHTML = '<div class="msg ok">Your service groups have been saved.</div>';
+  renderNav();
 }
 
 async function submitTestimony(){
@@ -1361,7 +1370,7 @@ async function renderTestimony(main){
           <div class="meta">${new Date(t.submittedAt).toLocaleDateString()}</div>
           <p>${escapeHTML(t.text)}</p>
         </div>
-      `).join('') || '<p>No testimonies published yet. Log in from My Account to share yours.</p>'}
+      `).join('') || (CURRENT_USER ? '<p>No testimonies published yet.</p>' : '<p>No testimonies published yet. Log in from My Account to share yours.</p>')}
     </div>
   `;
 }
