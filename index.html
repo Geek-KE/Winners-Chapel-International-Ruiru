@@ -345,12 +345,15 @@ async function dbDeleteUser(userId){
 function rowToVisitor(r){
   return { id:r.id, name:r.name, phone:r.phone, email:r.email||'', gender:r.gender||'', maritalStatus:r.marital_status||'', maritalOther:r.marital_other||'',
     how:r.how_heard||'', howOther:r.how_other||'', inviter:r.inviter||'', born:r.born_again||'', enjoyed:r.enjoyed||'', address:r.address||'',
-    joinInterest:r.join_interest||'', joinOther:r.join_other||'', prayer:r.prayer||'', intent:r.intent||'visitor', followedUp:!!r.followed_up, submittedAt:r.submitted_at };
+    joinInterest:r.join_interest||'', joinOther:r.join_other||'', prayer:r.prayer||'', intent:r.intent||'visitor', followedUp:!!r.followed_up, submittedAt:r.submitted_at,
+    // prayer request lifecycle: pending -> approved, then separately marked prayed once the pastor/super admin has prayed for it
+    prayerStatus:r.prayer_status||'pending', prayed:!!r.prayed, prayedBy:r.prayed_by||null, prayedAt:r.prayed_at||null };
 }
 function visitorToRow(v){
   return { id:v.id, name:v.name, phone:v.phone, email:v.email||null, gender:v.gender||null, marital_status:v.maritalStatus||null, marital_other:v.maritalOther||null,
     how_heard:v.how||null, how_other:v.howOther||null, inviter:v.inviter||null, born_again:v.born||null, enjoyed:v.enjoyed||null, address:v.address||null,
-    join_interest:v.joinInterest||null, join_other:v.joinOther||null, prayer:v.prayer||null, intent:v.intent||'visitor', followed_up:!!v.followedUp, submitted_at:v.submittedAt };
+    join_interest:v.joinInterest||null, join_other:v.joinOther||null, prayer:v.prayer||null, intent:v.intent||'visitor', followed_up:!!v.followedUp, submitted_at:v.submittedAt,
+    prayer_status:v.prayerStatus||'pending', prayed:!!v.prayed, prayed_by:v.prayedBy||null, prayed_at:v.prayedAt||null };
 }
 async function dbAddVisitor(v){
   if(supabaseClient){
@@ -368,6 +371,24 @@ async function dbGetVisitors(){
   }
   const rows = await localAll('visitors');
   return rows.slice().sort((a,b)=>new Date(b.submittedAt)-new Date(a.submittedAt));
+}
+// Updates a visitor's prayer request lifecycle fields (approval and/or "prayed for" tick).
+// Note: if using Supabase, add prayer_status (text), prayed (boolean), prayed_by (text),
+// prayed_at (timestamptz) columns to the visitors table if not already present.
+async function dbUpdateVisitorPrayer(id, patch){
+  if(supabaseClient){
+    const payload = {};
+    if('prayerStatus' in patch) payload.prayer_status = patch.prayerStatus;
+    if('prayed' in patch) payload.prayed = patch.prayed;
+    if('prayedBy' in patch) payload.prayed_by = patch.prayedBy;
+    if('prayedAt' in patch) payload.prayed_at = patch.prayedAt;
+    const { error } = await supabaseClient.from('visitors').update(payload).eq('id',id);
+    if(error) console.error('update visitor prayer failed', error);
+    return;
+  }
+  const rows = await localAll('visitors');
+  const v = rows.find(r=>r.id===id);
+  if(v){ Object.assign(v, patch); await localSet('visitors', rows); }
 }
 
 /* ---------- FOLLOW UPS ---------- */
@@ -1395,6 +1416,7 @@ async function submitNewPerson(){
     submittedAt: new Date().toISOString(), followedUp: false
   };
   await dbAddVisitor(record);
+  await logActivity('visitor_signup', `New visitor form submitted by "${name}"${prayer ? ' (includes a confidential prayer request)' : ''}`);
 
   {
     document.getElementById('main').innerHTML = `
@@ -1501,6 +1523,7 @@ async function saveMyGroups(){
   CURRENT_USER = u;
   const msg = document.getElementById('groupsMsg');
   if(msg) msg.innerHTML = '<div class="msg ok">Your service groups have been saved.</div>';
+  await logActivity('save_groups', `Updated their service groups to: ${chosen.join(', ')||'none'}`);
   renderNav();
 }
 
@@ -1509,6 +1532,7 @@ async function submitTestimony(){
   if(!text){ document.getElementById('testMsg').innerHTML = '<div class="msg err">Please write something first.</div>'; return; }
   const rec = {id: uid(), authorId: CURRENT_USER.id, authorName: CURRENT_USER.name, text, status:'pending', submittedAt: new Date().toISOString()};
   await dbAddTestimony(rec);
+  await logActivity('submit_testimony', `Submitted a testimony for review`);
   document.getElementById('testMsg').innerHTML = '<div class="msg ok">Thank you. Your testimony has been sent for review.</div>';
   document.getElementById('testimonyText').value='';
 }
@@ -1584,11 +1608,13 @@ async function bookCounselling(){
   if(!when){ document.getElementById('counselMsg').innerHTML = '<div class="msg err">Please add a preferred day and time.</div>'; return; }
   const rec = {id:uid(), userId:CURRENT_USER.id, name:CURRENT_USER.name, when, note, status:'requested', date:new Date().toISOString()};
   await dbAddCounselling(rec);
+  await logActivity('book_counselling', `Requested counselling for "${when}"`);
   refreshCheckinSub();
 }
 
 async function confirmCounselling(id){
   await dbConfirmCounselling(id);
+  await logActivity('confirm_counselling', `Confirmed a counselling booking (${id})`);
   refreshCheckinSub();
 }
 
@@ -1637,6 +1663,7 @@ async function addFollowup(visitorId){
   const notes = document.getElementById('fu-'+visitorId).value.trim();
   if(!notes) return;
   await dbAddFollowup(visitorId, {byId: CURRENT_USER.id, byName: CURRENT_USER.name, notes, date: new Date().toISOString()});
+  await logActivity('add_followup', `Recorded a follow up entry (visitor ${visitorId})`);
   refreshCheckinSub();
 }
 
@@ -1730,6 +1757,12 @@ async function manualCheckin(){
     return;
   }
   const todayKey = new Date().toISOString().slice(0,10);
+  const record = await dbGetAttendance(todayKey);
+  if(record.find(r=>r.userId===u.id)){
+    msg.innerHTML = `<div class="msg err">${escapeHTML(u.name)} has already checked in today.</div>`;
+    refreshCheckinSub();
+    return;
+  }
   await dbAddAttendance(todayKey, {userId:u.id, name:u.name, distance:null, manual:true, checkedInBy:CURRENT_USER.name});
   await logActivity('manual_checkin', `Checked in "${u.name}" for Sunday service on their behalf`);
   msg.innerHTML = `<div class="msg ok">${escapeHTML(u.name)} checked in.</div>`;
@@ -1853,17 +1886,28 @@ async function manualCheckinMeeting(group){
   const isGroupAdmin = CURRENT_USER && CURRENT_USER.role==='leader' && CURRENT_USER.adminGroup===group;
   if(!isSuper && !isGroupAdmin) return; // only that group's admin or a super admin may check someone in manually
   const safeId = group.replace(/[^a-zA-Z0-9]/g,'');
-  const nameEl = document.getElementById('manualMeetName-'+safeId);
+  const sel = document.getElementById('manualMeetUser-'+safeId);
   const msg = document.getElementById('manualMeetMsg-'+safeId);
-  const name = nameEl.value.trim();
-  if(!name){
-    if(msg) msg.innerHTML = '<div class="msg err" style="padding:6px 10px;font-size:12px;">Please enter a name.</div>';
+  const userId = sel ? sel.value : '';
+  if(!userId){
+    if(msg) msg.innerHTML = '<div class="msg err" style="padding:6px 10px;font-size:12px;">Please choose a member.</div>';
+    return;
+  }
+  const users = await dbGetUsers();
+  const u = users.find(x=>x.id===userId);
+  if(!u){
+    if(msg) msg.innerHTML = '<div class="msg err" style="padding:6px 10px;font-size:12px;">That member could not be found.</div>';
     return;
   }
   const todayKey = new Date().toISOString().slice(0,10);
-  await dbAddMeetingAttendance(group, todayKey, {userId:'manual-'+uid(), name, manual:true, checkedInBy:CURRENT_USER.name});
-  await logActivity('manual_checkin_meeting', `Checked in "${name}" for "${group}" (no smartphone)`);
-  nameEl.value = '';
+  const record = await dbGetMeetingAttendance(group, todayKey);
+  if(record.find(r=>r.userId===u.id)){
+    if(msg) msg.innerHTML = `<div class="msg err" style="padding:6px 10px;font-size:12px;">${escapeHTML(u.name)} has already checked in today.</div>`;
+    refreshCheckinSub();
+    return;
+  }
+  await dbAddMeetingAttendance(group, todayKey, {userId:u.id, name:u.name, manual:true, checkedInBy:CURRENT_USER.name});
+  await logActivity('manual_checkin_meeting', `Checked in "${u.name}" for "${group}" (no smartphone)`);
   refreshCheckinSub();
 }
 
@@ -1888,6 +1932,7 @@ async function submitAbsence(){
   if(!text) return;
   const rec = {id:uid(), text, authorId: CURRENT_USER.id, authorName: CURRENT_USER.name, date: new Date().toISOString()};
   await dbAddAbsence(rec);
+  await logActivity('submit_absence', 'Submitted an absence note');
   document.getElementById('absMsg').innerHTML = '<div class="msg ok">Thank you, your note has been received.</div>';
   document.getElementById('absText').value = '';
 }
@@ -1950,9 +1995,10 @@ async function renderAdmin(main){
     `;
   }
 
-  // pending testimonies
+  // testimonies: pending ones need approve/reject, all testimonies can be deleted by an admin
   const testimonies = await dbGetTestimonies();
   const pending = testimonies.filter(t=>t.status==='pending');
+  const nonPending = testimonies.filter(t=>t.status!=='pending');
 
   let testimonyBlock = `
     <div class="card">
@@ -1963,8 +2009,23 @@ async function renderAdmin(main){
           <p>${escapeHTML(t.text)}</p>
           <button class="btn small gold" onclick="approveTestimony('${t.id}')">Approve</button>
           <button class="btn small danger" onclick="rejectTestimony('${t.id}')">Reject</button>
+          <button class="btn small danger" onclick="deleteTestimony('${t.id}')">Delete</button>
         </div>
       `).join('') || '<p style="font-size:14px;color:var(--grey)">No testimonies waiting.</p>'}
+    </div>
+    <div class="card">
+      <h3>All Other Testimonies (${nonPending.length})</h3>
+      <p style="color:var(--grey);font-size:13px">Approved, rejected, and expired testimonies. Delete removes a testimony permanently, including from the public marquee if it is currently live.</p>
+      ${nonPending.map(t=>`
+        <div class="list-item">
+          <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px">
+            <strong>${escapeHTML(t.authorName)}</strong>
+            <span class="badge ${t.status==='approved'?'green':(t.status==='rejected'?'grey':'grey')}">${escapeHTML(t.status)}</span>
+          </div>
+          <p>${escapeHTML(t.text)}</p>
+          <button class="btn small danger" onclick="deleteTestimony('${t.id}')">Delete</button>
+        </div>
+      `).join('') || '<p style="font-size:14px;color:var(--grey)">Nothing here yet.</p>'}
     </div>
   `;
 
@@ -1984,6 +2045,8 @@ async function renderAdmin(main){
   `;
 
   // prayer requests, confidential
+  // lifecycle: pending -> approved (by pastor/super admin or KAPS leadership) -> prayed
+  // for (ticked only by the pastor/super admin, once someone has actually prayed for it)
   let prayerBlock = '';
   if(isSuper || CURRENT_USER.groups.includes("KAPS (Kingdom Advancement Prayer Squad)")){
     const allVisitors = await dbGetVisitors();
@@ -1991,11 +2054,18 @@ async function renderAdmin(main){
     prayerBlock = `
       <div class="card">
         <h3>Confidential Prayer Requests</h3>
-        <p style="color:var(--grey);font-size:13px">Visible only to the pastor and KAPS leadership.</p>
+        <p style="color:var(--grey);font-size:13px">Visible only to the pastor and KAPS leadership. Approve a request, then once the pastor or a Super Admin has prayed for it, it can be ticked as prayed for.</p>
         ${visitors.map(v=>`
           <div class="list-item">
-            <strong>${escapeHTML(v.name)}</strong> <span class="meta">${escapeHTML(v.phone)}</span>
+            <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px">
+              <strong>${escapeHTML(v.name)}</strong>
+              <span class="badge ${v.prayed?'green':(v.prayerStatus==='approved'?'gold':'grey')}">${v.prayed?'Prayed For':(v.prayerStatus==='approved'?'Approved':'Pending Approval')}</span>
+            </div>
+            <span class="meta">${escapeHTML(v.phone)}</span>
             <p>${escapeHTML(v.prayer)}</p>
+            ${v.prayed ? `<div class="meta">Prayed for by ${escapeHTML(v.prayedBy||'-')} on ${v.prayedAt ? new Date(v.prayedAt).toLocaleString() : '-'}</div>` : ''}
+            ${v.prayerStatus!=='approved' ? `<button class="btn small gold" onclick="approvePrayerRequest('${v.id}')">Approve Request</button>` : ''}
+            ${v.prayerStatus==='approved' && !v.prayed && isSuper ? `<label style="display:flex;align-items:center;gap:6px;margin-top:8px;font-size:13px"><input type="checkbox" onclick="markPrayerPrayed('${v.id}', this)"> Mark as prayed for</label>` : ''}
           </div>
         `).join('') || '<p style="font-size:14px;color:var(--grey)">No prayer requests submitted yet.</p>'}
       </div>
@@ -2122,6 +2192,26 @@ async function approveTestimony(id){
 async function rejectTestimony(id){
   await dbSetTestimonyStatus(id, 'rejected');
   await logActivity('reject_testimony', `Rejected testimony ${id}`);
+  renderAdmin(document.getElementById('main'));
+}
+async function deleteTestimony(id){
+  if(!CURRENT_USER || !['super_admin','leader'].includes(CURRENT_USER.role)) return;
+  if(!confirm('Delete this testimony permanently? This cannot be undone.')) return;
+  await dbDeleteTestimony(id);
+  await logActivity('delete_testimony', `Deleted testimony ${id}`);
+  renderAdmin(document.getElementById('main'));
+}
+async function approvePrayerRequest(id){
+  if(!CURRENT_USER || !(CURRENT_USER.role==='super_admin' || CURRENT_USER.groups.includes("KAPS (Kingdom Advancement Prayer Squad)"))) return;
+  await dbUpdateVisitorPrayer(id, {prayerStatus:'approved'});
+  await logActivity('approve_prayer_request', `Approved a confidential prayer request (${id})`);
+  renderAdmin(document.getElementById('main'));
+}
+async function markPrayerPrayed(id, checkbox){
+  // only the pastor / a super admin may tick a prayer request as prayed for
+  if(!CURRENT_USER || CURRENT_USER.role!=='super_admin'){ if(checkbox) checkbox.checked = false; return; }
+  await dbUpdateVisitorPrayer(id, {prayed:true, prayedBy:CURRENT_USER.name, prayedAt:new Date().toISOString()});
+  await logActivity('mark_prayer_prayed', `Marked a confidential prayer request as prayed for (${id})`);
   renderAdmin(document.getElementById('main'));
 }
 function onRoleSelectChange(userId){
