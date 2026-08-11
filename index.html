@@ -1707,28 +1707,31 @@ async function renderAdmin(main){
     userBlock = `
       <div class="card">
         <h3>Manage Members</h3>
-        <p style="color:var(--grey);font-size:13px">Promote a member to Service Group Admin to let them manage check ins for one specific group. Super Admins manage the general Sunday check in.</p>
+        <p style="color:var(--grey);font-size:13px">Promote a member to Service Group Admin to let them manage check ins for one specific group. Super Admins manage the general Sunday check in. Choose the role (and group, if applicable), then press Save.</p>
         <table>
-          <tr><th>Name</th><th>Phone</th><th>My Groups</th><th>Role</th><th>Admin Of</th></tr>
+          <tr><th>Name</th><th>Phone</th><th>My Groups</th><th>Role</th><th>Admin Of</th><th></th></tr>
           ${users.map(u=>`
-            <tr>
+            <tr id="userRow-${u.id}">
               <td>${escapeHTML(u.name)}</td>
               <td>${escapeHTML(u.phone)}</td>
               <td style="font-size:12px">${u.groups.join(', ')||'-'}</td>
               <td>
-                <select onchange="changeRole('${u.id}', this.value)">
+                <select id="roleSelect-${u.id}" onchange="onRoleSelectChange('${u.id}')">
                   <option value="member" ${u.role==='member'?'selected':''}>Member</option>
                   <option value="leader" ${u.role==='leader'?'selected':''}>Service Group Admin</option>
                   <option value="super_admin" ${u.role==='super_admin'?'selected':''}>Super Admin</option>
                 </select>
               </td>
               <td>
-                ${u.role==='leader' ? `
-                  <select onchange="changeAdminGroup('${u.id}', this.value)">
-                    <option value="">Choose a group&hellip;</option>
-                    ${GROUPS.map(g=>`<option value="${escapeHTML(g)}" ${u.adminGroup===g?'selected':''}>${escapeHTML(g)}</option>`).join('')}
-                  </select>
-                ` : '<span style="color:var(--grey);font-size:12px">&mdash;</span>'}
+                <select id="groupSelect-${u.id}" style="${u.role==='leader' ? '' : 'display:none;'}">
+                  <option value="">Choose a group&hellip;</option>
+                  ${GROUPS.map(g=>`<option value="${escapeHTML(g)}" ${u.adminGroup===g?'selected':''}>${escapeHTML(g)}</option>`).join('')}
+                </select>
+                ${u.role!=='leader' ? '<span id="groupSelectPlaceholder-'+u.id+'" style="color:var(--grey);font-size:12px">&mdash;</span>' : ''}
+              </td>
+              <td>
+                <button class="btn small gold" onclick="saveMemberRole('${u.id}')">Save</button>
+                <div id="roleMsg-${u.id}" style="margin-top:4px;"></div>
               </td>
             </tr>
           `).join('')}
@@ -1773,25 +1776,41 @@ async function rejectTestimony(id){
   await dbSetTestimonyStatus(id, 'rejected');
   renderAdmin(document.getElementById('main'));
 }
-async function changeRole(userId, role){
+function onRoleSelectChange(userId){
+  const role = document.getElementById('roleSelect-'+userId).value;
+  const groupSelect = document.getElementById('groupSelect-'+userId);
+  const placeholder = document.getElementById('groupSelectPlaceholder-'+userId);
+  if(role==='leader'){
+    if(groupSelect) groupSelect.style.display = '';
+    if(placeholder) placeholder.style.display = 'none';
+  } else {
+    if(groupSelect){ groupSelect.style.display = 'none'; groupSelect.value = ''; }
+    if(placeholder) placeholder.style.display = '';
+  }
+}
+
+async function saveMemberRole(userId){
+  const role = document.getElementById('roleSelect-'+userId).value;
+  const groupSelect = document.getElementById('groupSelect-'+userId);
+  const group = groupSelect ? groupSelect.value : '';
+  const msgEl = document.getElementById('roleMsg-'+userId);
+  if(role==='leader' && !group){
+    if(msgEl) msgEl.innerHTML = '<div class="msg err" style="padding:6px 10px;font-size:12px;">Please choose a group.</div>';
+    return;
+  }
   const users = await dbGetUsers();
   const u = users.find(x=>x.id===userId);
   if(u){
     u.role = role;
-    // only Service Group Admins (leaders) carry a single assigned group
-    if(role !== 'leader') u.adminGroup = null;
+    u.adminGroup = role==='leader' ? group : null;
     await dbSaveUser(u);
   }
-  if(CURRENT_USER && CURRENT_USER.id===userId){ CURRENT_USER.role = role; if(role!=='leader') CURRENT_USER.adminGroup = null; }
+  if(CURRENT_USER && CURRENT_USER.id===userId){
+    CURRENT_USER.role = role;
+    CURRENT_USER.adminGroup = role==='leader' ? group : null;
+  }
+  if(msgEl) msgEl.innerHTML = '<div class="msg ok" style="padding:6px 10px;font-size:12px;">Saved.</div>';
   renderNav();
-  renderAdmin(document.getElementById('main'));
-}
-
-async function changeAdminGroup(userId, group){
-  const users = await dbGetUsers();
-  const u = users.find(x=>x.id===userId);
-  if(u){ u.adminGroup = group || null; await dbSaveUser(u); }
-  if(CURRENT_USER && CURRENT_USER.id===userId) CURRENT_USER.adminGroup = group || null;
   renderUserbar();
 }
 
