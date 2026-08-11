@@ -570,6 +570,7 @@ async function init(){
   renderNav();
   renderUserbar();
   showTab('home');
+  restoreSignupSession();
 }
 
 function renderNav(){
@@ -670,7 +671,7 @@ function main_alert(text){
 }
 
 /* ---------------- MODAL / AUTH ---------------- */
-function closeModal(){ document.getElementById('modalBg').classList.remove('active'); SIGNUP_VERIFIED_EMAIL = null; }
+function closeModal(){ document.getElementById('modalBg').classList.remove('active'); SIGNUP_VERIFIED_EMAIL = null; clearSignupSession(); }
 function openModalHTML(html){
   document.getElementById('modalContent').innerHTML = html;
   document.getElementById('modalBg').classList.add('active');
@@ -681,10 +682,61 @@ let _consentNext = null;
 
 // Email OTP verification state for the in-progress signup only (cleared whenever
 // the modal is closed, so a fresh verification is required for every attempt).
+// Also persisted to sessionStorage so that if the browser reloads the page
+// (very common on mobile when someone switches to their Mail app to grab the
+// code and the browser tab gets suspended/reloaded in the background), the
+// verification step picks up right where it left off instead of forcing the
+// person to start the whole sign up over again.
 let SIGNUP_VERIFIED_EMAIL = null;
 let SIGNUP_OTP = null; // { email, code, expiresAt }
 let _otpResendAt = 0;
 function generateOtpCode(){ return String(Math.floor(100000 + Math.random()*900000)); }
+
+const SIGNUP_SESSION_KEY = 'wc_signup_session_v1';
+function saveSignupSession(){
+  try{
+    sessionStorage.setItem(SIGNUP_SESSION_KEY, JSON.stringify({
+      otp: SIGNUP_OTP, verifiedEmail: SIGNUP_VERIFIED_EMAIL, resendAt: _otpResendAt
+    }));
+  }catch(e){}
+}
+function clearSignupSession(){
+  try{ sessionStorage.removeItem(SIGNUP_SESSION_KEY); }catch(e){}
+}
+// Called once on page load. If there is an unexpired, in-progress email
+// verification, reopen the modal at the right step automatically.
+function restoreSignupSession(){
+  let saved;
+  try{ saved = JSON.parse(sessionStorage.getItem(SIGNUP_SESSION_KEY) || 'null'); }catch(e){ saved = null; }
+  if(!saved) return;
+  if(saved.otp && saved.otp.expiresAt > Date.now()){
+    SIGNUP_OTP = saved.otp;
+    _otpResendAt = saved.resendAt || 0;
+    showOtpCodeStep(saved.otp.email);
+  } else if(saved.verifiedEmail){
+    SIGNUP_VERIFIED_EMAIL = saved.verifiedEmail;
+    doOpenSignupModal(saved.verifiedEmail);
+  } else {
+    clearSignupSession();
+  }
+}
+
+// Attempts to read a 6-digit code from the clipboard and drop it straight
+// into the verification field, so a member who copies the code from their
+// email app doesn't have to switch back and paste it manually. Silently
+// does nothing if clipboard access isn't available or isn't granted.
+async function tryAutofillOtpFromClipboard(){
+  const input = document.getElementById('otpCode');
+  if(!input || !navigator.clipboard || !navigator.clipboard.readText) return;
+  try{
+    const text = (await navigator.clipboard.readText() || '').trim();
+    const match = text.match(/\b(\d{6})\b/);
+    if(match && input.value !== match[1]){
+      input.value = match[1];
+      input.dispatchEvent(new Event('input'));
+    }
+  }catch(e){ /* clipboard read blocked/denied — ignore, user can still paste manually */ }
+}
 
 function requireConsent(next){
   if(CONSENT_GIVEN){ next(); return; }
@@ -782,6 +834,7 @@ async function sendSignupOtp(){
     }
   }
   _otpResendAt = Date.now() + 30000;
+  saveSignupSession();
   showOtpCodeStep(email);
 }
 
@@ -794,10 +847,22 @@ function showOtpCodeStep(email){
     ${!emailjsReady ? `<div class="msg ok">Demo mode (EmailJS not configured yet): your code is <strong>${SIGNUP_OTP.code}</strong></div>` : ''}
     <div id="otpMsg"></div>
     <label>Verification Code</label>
-    <input type="text" inputmode="numeric" maxlength="6" id="otpCode" placeholder="123456">
+    <input type="text" inputmode="numeric" maxlength="6" id="otpCode" placeholder="123456" autocomplete="one-time-code">
+    <p style="font-size:12px;color:var(--grey);margin-top:-6px;">Copied the code from your email app? Just come back here — we'll try to fill it in for you automatically.</p>
     <button class="btn gold" onclick="verifySignupOtp('${safeEmail}')">Verify Code</button>
     <p style="margin-top:14px;font-size:13px;"><a href="#" onclick="resendSignupOtp('${safeEmail}');return false;">Resend code</a></p>
   `);
+  const codeInput = document.getElementById('otpCode');
+  // Try immediately, and again whenever the tab/page regains focus (e.g. the
+  // person switches back from their Mail app after copying the code).
+  tryAutofillOtpFromClipboard();
+  document.addEventListener('visibilitychange', _otpVisibilityHandler);
+  window.addEventListener('focus', _otpVisibilityHandler);
+  if(codeInput) codeInput.addEventListener('focus', tryAutofillOtpFromClipboard);
+}
+function _otpVisibilityHandler(){
+  if(document.visibilityState && document.visibilityState !== 'visible') return;
+  if(document.getElementById('otpCode')) tryAutofillOtpFromClipboard();
 }
 
 async function verifySignupOtp(email){
@@ -821,6 +886,7 @@ async function verifySignupOtp(email){
   }
   SIGNUP_VERIFIED_EMAIL = email;
   SIGNUP_OTP = null;
+  saveSignupSession();
   doOpenSignupModal(email);
 }
 
@@ -845,6 +911,7 @@ async function resendSignupOtp(email){
     }
   }
   _otpResendAt = Date.now() + 30000;
+  saveSignupSession();
   showOtpCodeStep(email);
 }
 
