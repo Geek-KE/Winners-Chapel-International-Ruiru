@@ -150,7 +150,7 @@
   .schedule-item{display:flex;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--line);}
   .schedule-item:last-child{border-bottom:none;}
   .schedule-item .day{font-weight:bold;color:var(--royal-deep);}
-  .schedule-item .time{color:var(--gold);font-weight:bold;}
+  .schedule-item .time{color:var(--ink);font-weight:bold;}
 
   .note{background:#FCEACB;border-radius:8px;padding:12px 14px;font-size:13px;color:#7A5D06;margin-top:14px;}
   .msg{padding:10px 14px;border-radius:7px;margin-bottom:14px;font-size:14px;}
@@ -273,13 +273,13 @@ async function dbGetSettings(){
   if(supabaseClient){
     const { data, error } = await supabaseClient.from('settings').select('*').eq('id',1).maybeSingle();
     if(error || !data) return null;
-    return { teacherName:data.teacher_name, teacherPhone:data.teacher_phone, churchLat:data.church_lat, churchLng:data.church_lng, meetingsOpen:data.meetings_open||{}, checkinLabel:data.checkin_label||'' };
+    return { teacherName:data.teacher_name, teacherPhone:data.teacher_phone, churchLat:data.church_lat, churchLng:data.church_lng, meetingsOpen:data.meetings_open||{}, checkinLabel:data.checkin_label||'', generalCheckinOpen:!!data.general_checkin_open };
   }
   return await localGet('settings');
 }
 async function dbSaveSettings(s){
   if(supabaseClient){
-    const { error } = await supabaseClient.from('settings').upsert({ id:1, teacher_name:s.teacherName, teacher_phone:s.teacherPhone, church_lat:s.churchLat, church_lng:s.churchLng, meetings_open:s.meetingsOpen, checkin_label:s.checkinLabel }, { onConflict:'id' });
+    const { error } = await supabaseClient.from('settings').upsert({ id:1, teacher_name:s.teacherName, teacher_phone:s.teacherPhone, church_lat:s.churchLat, church_lng:s.churchLng, meetings_open:s.meetingsOpen, checkin_label:s.checkinLabel, general_checkin_open:!!s.generalCheckinOpen }, { onConflict:'id' });
     if(error) console.error('save settings failed', error);
     return;
   }
@@ -287,8 +287,8 @@ async function dbSaveSettings(s){
 }
 
 /* ---------- USERS ---------- */
-function rowToUser(r){ return { id:r.id, name:r.name, phone:r.phone, email:r.email||'', password:r.password, role:r.role, groups:r.groups||[] }; }
-function userToRow(u){ return { id:u.id, name:u.name, phone:u.phone, email:u.email||null, password:u.password, role:u.role, groups:u.groups||[] }; }
+function rowToUser(r){ return { id:r.id, name:r.name, phone:r.phone, email:r.email||'', password:r.password, role:r.role, groups:r.groups||[], adminGroup:r.admin_group||null }; }
+function userToRow(u){ return { id:u.id, name:u.name, phone:u.phone, email:u.email||null, password:u.password, role:u.role, groups:u.groups||[], admin_group:u.adminGroup||null }; }
 async function dbGetUsers(){
   if(supabaseClient){
     const { data, error } = await supabaseClient.from('users').select('*').order('created_at',{ascending:true});
@@ -511,7 +511,7 @@ function isValidEmail(email){
 /* ---------------- APP STATE ---------------- */
 let CURRENT_USER = null; // {id,name,phone,role,groups}
 let SETTINGS = { teacherPhone:'0700 000 000', teacherName:'Sis. Grace (Believers Foundation Class Coordinator)',
-  churchLat:-1.1547, churchLng:36.9639, meetingsOpen:{} , checkinLabel:'' };
+  churchLat:-1.1547, churchLng:36.9639, meetingsOpen:{}, checkinLabel:'', generalCheckinOpen:false };
 
 const GROUPS = ['Choir','Sanctuary Keeping','Sunday School Teachers','Security','Crowd Control (CCU)','Hospitality','Technical/Media','KAPS (Kingdom Advancement Prayer Squad)','Follow Up Team','Joel\'s Company'];
 
@@ -528,22 +528,18 @@ const TABS = [
 
 let ACTIVE_TAB = 'home';
 
+// Phone numbers of church leadership. Anyone who signs up with one of these
+// numbers automatically receives the Super Admin role - no shared password
+// is stored in this file, each person still sets their own password when
+// they sign up. Numbers are compared with all spaces/dashes stripped.
+const SUPER_ADMIN_PHONES = ['0720746132','0705411249','0710991722'];
+function normalizePhone(p){ return (p||'').replace(/\D/g,''); }
+
 /* ---------------- INIT ---------------- */
 async function init(){
   const savedSettings = await dbGetSettings();
   if(savedSettings) SETTINGS = Object.assign(SETTINGS, savedSettings);
   else await dbSaveSettings(SETTINGS);
-
-  // seed default super admin accounts if none exist yet
-  const users = await dbGetUsers();
-  if(users.length===0){
-    const seed = [
-      {id:uid(), name:'Pastor', phone:'0720746132', password:'winners2026', role:'super_admin', groups:[]},
-      {id:uid(), name:'Daniel', phone:'0705411249', password:'winners2026', role:'super_admin', groups:[]},
-      {id:uid(), name:'Victor', phone:'0710991722', password:'winners2026', role:'super_admin', groups:[]}
-    ];
-    for(const u of seed) await dbSaveUser(u);
-  }
 
   renderNav();
   renderUserbar();
@@ -598,14 +594,15 @@ function closeNav(){
 function renderUserbar(){
   const bar = document.getElementById('userbar');
   if(CURRENT_USER){
-    bar.innerHTML = `${escapeHTML(CURRENT_USER.name)}<br><span style="color:var(--gold);font-size:11px">${roleLabel(CURRENT_USER.role)}</span>`;
+    bar.innerHTML = `${escapeHTML(CURRENT_USER.name)}<br><span style="color:var(--gold);font-size:11px">${roleLabel(CURRENT_USER.role, CURRENT_USER.adminGroup)}</span>`;
   } else {
     bar.innerHTML = '';
   }
 }
 
-function roleLabel(r){
-  return {member:'Member', leader:'Group Leader', super_admin:'Super Admin', visitor:'Visitor'}[r] || 'Member';
+function roleLabel(r, adminGroup){
+  const base = {member:'Member', leader:'Service Group Admin', super_admin:'Super Admin', visitor:'Visitor'}[r] || 'Member';
+  return (r==='leader' && adminGroup) ? `${base} (${adminGroup})` : base;
 }
 
 async function showTab(id){
@@ -750,7 +747,8 @@ async function doSignup(){
     document.getElementById('signupMsg').innerHTML = '<div class="msg err">An account with this email already exists. <a href="#" onclick="openLogin();return false;" style="color:inherit;font-weight:bold;text-decoration:underline;">Log in instead</a></div>';
     return;
   }
-  const newUser = {id:uid(), name, phone, email, password:pass, role:'member', groups: []};
+  const role = SUPER_ADMIN_PHONES.includes(normalizePhone(phone)) ? 'super_admin' : 'member';
+  const newUser = {id:uid(), name, phone, email, password:pass, role, groups: [], adminGroup:null};
   await dbSaveUser(newUser);
   CURRENT_USER = newUser;
   closeModal();
@@ -776,20 +774,20 @@ async function renderHome(main){
       <p>We are happy you are worshipping with us today. Winners Chapel International Ruiru exists to see lives transformed by the Word of God, and to raise people who walk in their full, God given potential.</p>
       <div class="verse">Liberating the world from all oppression of the devil, through the preaching of the Word of Faith.</div>
       ${CURRENT_USER ? '' : '<button class="btn gold" onclick="showTab(\'newperson\')">I Am Visiting For The First Time</button>'}
-      <button class="btn outline" onclick="showTab('about')">Learn About Us</button>
+      ${CURRENT_USER ? '' : '<button class="btn outline" onclick="showTab(\'about\')">Learn About Us</button>'}
 
       <div class="grid3" style="margin-top:30px;text-align:center;">
         <div class="card">
           <h3>Sunday Service</h3>
-          <p style="color:var(--grey);font-size:14px">9:00 am to 11:30 am, with Workers Prayer at 8:00 am.</p>
+          <p style="color:var(--ink);font-size:14px">9:00 am to 11:30 am, with Workers Prayer at 8:00 am.</p>
         </div>
         <div class="card">
           <h3>Midweek Service</h3>
-          <p style="color:var(--grey);font-size:14px">Wednesdays, 5:00 pm to 6:30 pm.</p>
+          <p style="color:var(--ink);font-size:14px">Wednesdays, 5:00 pm to 6:30 pm.</p>
         </div>
         <div class="card">
           <h3>Kingdom Advancement Prayers</h3>
-          <p style="color:var(--grey);font-size:14px">Tuesdays, 5:00 pm to 6:00 pm.</p>
+          <p style="color:var(--ink);font-size:14px">Tuesdays, 5:00 pm to 6:00 pm.</p>
         </div>
       </div>
     </div>
@@ -1039,7 +1037,7 @@ async function renderAccount(main){
   main.innerHTML = `
     <div class="card">
       <h2>My Account</h2>
-      <p><strong>${escapeHTML(u.name)}</strong> &middot; ${escapeHTML(u.phone)}${u.email ? ' &middot; '+escapeHTML(u.email) : ''} &middot; <span class="badge blue">${roleLabel(u.role)}</span></p>
+      <p><strong>${escapeHTML(u.name)}</strong> &middot; ${escapeHTML(u.phone)}${u.email ? ' &middot; '+escapeHTML(u.email) : ''} &middot; <span class="badge blue">${roleLabel(u.role, u.adminGroup)}</span></p>
       <label>My Service Groups</label>
       <div class="check-row">
         ${GROUPS.map(g=>`<label><input type="checkbox" value="${g}" ${u.groups.includes(g)?'checked':''} onchange="toggleMyGroup('${g.replace(/'/g,"\\'")}')"> ${g}</label>`).join('')}
@@ -1232,16 +1230,20 @@ function haversineMeters(lat1, lon1, lat2, lon2){
 
 async function renderAttendance(main){
   if(!requireLogin('Please log in to sign the attendance register.')) return;
+  const isSuper = CURRENT_USER.role==='super_admin';
   const todayKey = new Date().toISOString().slice(0,10);
   const record = await dbGetAttendance(todayKey);
   const already = record.find(r=>r.userId===CURRENT_USER.id);
+  const open = !!SETTINGS.generalCheckinOpen;
   main.innerHTML = `
     <div class="card">
       <h2>Sunday Check In</h2>
-      <p style="color:var(--grey);font-size:14px">Check in is only accepted when you are within 500 meters of the chapel. This builds our attendance record for today, ${new Date().toDateString()}.</p>
-      <div id="attMsg"></div>
+      <p style="color:var(--grey);font-size:14px">Check in is only accepted when you are within 500 meters of the chapel, and while a Super Admin has the general check in open. This builds our attendance record for today, ${new Date().toDateString()}.</p>
+      <span class="badge ${open?'green':'grey'}">${open?'Check In Open':'Check In Closed'}</span>
+      ${isSuper ? `<button class="btn small ${open?'danger':''}" style="margin-left:8px" onclick="toggleGeneralCheckin()">${open?'Close General Check In':'Open General Check In For Today'}</button>` : ''}
+      <div id="attMsg" style="margin-top:12px"></div>
       ${already ? `<div class="msg ok">You already checked in today at ${new Date(already.time).toLocaleTimeString()}.</div>` :
-      `<button class="btn gold" onclick="tryCheckin()">Check In Now</button>`}
+      (open ? `<button class="btn gold" onclick="tryCheckin()">Check In Now</button>` : `<p style="color:var(--grey);font-size:13px">Check in has not been opened yet today. Please check back once service begins.</p>`)}
       <h3 style="margin-top:24px">Today's Register (${record.length})</h3>
       <table>
         <tr><th>Name</th><th>Time</th></tr>
@@ -1251,7 +1253,18 @@ async function renderAttendance(main){
   `;
 }
 
+async function toggleGeneralCheckin(){
+  if(!CURRENT_USER || CURRENT_USER.role!=='super_admin') return; // only super admins control the general check in
+  SETTINGS.generalCheckinOpen = !SETTINGS.generalCheckinOpen;
+  await dbSaveSettings(SETTINGS);
+  refreshCheckinSub();
+}
+
 function tryCheckin(){
+  if(!SETTINGS.generalCheckinOpen){
+    document.getElementById('attMsg').innerHTML = '<div class="msg err">Check in is not open right now.</div>';
+    return;
+  }
   const msg = document.getElementById('attMsg');
   msg.innerHTML = '<div class="msg ok">Locating you, please allow location access...</div>';
   if(!navigator.geolocation){
@@ -1278,12 +1291,15 @@ function tryCheckin(){
 /* ---------------- GROUP MEETINGS ---------------- */
 async function renderMeetings(main){
   if(!requireLogin('Please log in to view group meetings.')) return;
+  const isSuper = CURRENT_USER.role==='super_admin';
   const isLeaderOrAdmin = ['super_admin','leader'].includes(CURRENT_USER.role);
   let controls = '';
   for(const g of GROUPS){
     const open = SETTINGS.meetingsOpen[g];
     const inGroup = CURRENT_USER.groups.includes(g);
     if(!inGroup && !isLeaderOrAdmin) continue;
+    // only the group's own assigned admin, or a super admin, may open/close its check in
+    const canToggle = isSuper || (CURRENT_USER.role==='leader' && CURRENT_USER.adminGroup===g);
     const todayKey = new Date().toISOString().slice(0,10);
     const record = await dbGetMeetingAttendance(g, todayKey);
     const already = record.find(r=>r.userId===CURRENT_USER.id);
@@ -1293,7 +1309,7 @@ async function renderMeetings(main){
           <strong>${g}</strong>
           <span class="badge ${open?'green':'grey'}">${open?'Meeting Open':'Closed'}</span>
         </div>
-        ${isLeaderOrAdmin ? `<button class="btn small ${open?'danger':''}" style="margin-top:8px" onclick="toggleMeeting('${g.replace(/'/g,"\\'")}')">${open?'Close Check In':'Open Check In For Today'}</button>` : ''}
+        ${canToggle ? `<button class="btn small ${open?'danger':''}" style="margin-top:8px" onclick="toggleMeeting('${g.replace(/'/g,"\\'")}')">${open?'Close Check In':'Open Check In For Today'}</button>` : ''}
         ${inGroup && open ? (already ? `<div class="msg ok" style="margin-top:8px">You checked in at ${new Date(already.time).toLocaleTimeString()}.</div>` : `<button class="btn gold small" style="margin-top:8px" onclick="checkinMeeting('${g.replace(/'/g,"\\'")}')">Check In</button>`) : ''}
         ${isLeaderOrAdmin ? `<div class="meta" style="margin-top:8px">Checked in today: ${record.map(r=>escapeHTML(r.name)).join(', ')||'None yet'}</div>` : ''}
       </div>
@@ -1308,6 +1324,9 @@ async function renderMeetings(main){
 }
 
 async function toggleMeeting(group){
+  const isSuper = CURRENT_USER && CURRENT_USER.role==='super_admin';
+  const isGroupAdmin = CURRENT_USER && CURRENT_USER.role==='leader' && CURRENT_USER.adminGroup===group;
+  if(!isSuper && !isGroupAdmin) return; // only that group's admin or a super admin may toggle
   SETTINGS.meetingsOpen[group] = !SETTINGS.meetingsOpen[group];
   await dbSaveSettings(SETTINGS);
   refreshCheckinSub();
@@ -1397,6 +1416,8 @@ async function renderAdmin(main){
         <input type="number" step="0.0001" id="setLat" value="${SETTINGS.churchLat}">
         <label>Chapel Longitude</label>
         <input type="number" step="0.0001" id="setLng" value="${SETTINGS.churchLng}">
+        <button class="btn small outline" type="button" onclick="useMyLocationForCenter()">Use My Current Location</button>
+        <div id="locMsg" style="margin-top:8px"></div>
         <button class="btn" onclick="saveSettings()">Save Settings</button>
         <div id="setMsg"></div>
       </div>
@@ -1462,20 +1483,28 @@ async function renderAdmin(main){
     userBlock = `
       <div class="card">
         <h3>Manage Members</h3>
+        <p style="color:var(--grey);font-size:13px">Promote a member to Service Group Admin to let them manage check ins for one specific group. Super Admins manage the general Sunday check in.</p>
         <table>
-          <tr><th>Name</th><th>Phone</th><th>Role</th><th>Groups</th><th></th></tr>
+          <tr><th>Name</th><th>Phone</th><th>My Groups</th><th>Role</th><th>Admin Of</th></tr>
           ${users.map(u=>`
             <tr>
               <td>${escapeHTML(u.name)}</td>
               <td>${escapeHTML(u.phone)}</td>
-              <td>${roleLabel(u.role)}</td>
               <td style="font-size:12px">${u.groups.join(', ')||'-'}</td>
               <td>
                 <select onchange="changeRole('${u.id}', this.value)">
                   <option value="member" ${u.role==='member'?'selected':''}>Member</option>
-                  <option value="leader" ${u.role==='leader'?'selected':''}>Leader</option>
+                  <option value="leader" ${u.role==='leader'?'selected':''}>Service Group Admin</option>
                   <option value="super_admin" ${u.role==='super_admin'?'selected':''}>Super Admin</option>
                 </select>
+              </td>
+              <td>
+                ${u.role==='leader' ? `
+                  <select onchange="changeAdminGroup('${u.id}', this.value)">
+                    <option value="">Choose a group&hellip;</option>
+                    ${GROUPS.map(g=>`<option value="${escapeHTML(g)}" ${u.adminGroup===g?'selected':''}>${escapeHTML(g)}</option>`).join('')}
+                  </select>
+                ` : '<span style="color:var(--grey);font-size:12px">&mdash;</span>'}
               </td>
             </tr>
           `).join('')}
@@ -1485,6 +1514,22 @@ async function renderAdmin(main){
   }
 
   main.innerHTML = `<h2>Admin Dashboard</h2>` + settingsBlock + testimonyBlock + prayerBlock + absenceBlock + userBlock;
+}
+
+function useMyLocationForCenter(){
+  const msg = document.getElementById('locMsg');
+  if(!navigator.geolocation){
+    msg.innerHTML = '<div class="msg err">Your device does not support location services.</div>';
+    return;
+  }
+  msg.innerHTML = '<div class="msg ok">Locating you, please allow location access...</div>';
+  navigator.geolocation.getCurrentPosition(pos=>{
+    document.getElementById('setLat').value = pos.coords.latitude.toFixed(6);
+    document.getElementById('setLng').value = pos.coords.longitude.toFixed(6);
+    msg.innerHTML = '<div class="msg ok">Location captured. Review the coordinates, then click Save Settings.</div>';
+  }, err=>{
+    msg.innerHTML = '<div class="msg err">We could not read your location. Please enable location access and try again.</div>';
+  }, {enableHighAccuracy:true, timeout:12000});
 }
 
 async function saveSettings(){
@@ -1507,9 +1552,23 @@ async function rejectTestimony(id){
 async function changeRole(userId, role){
   const users = await dbGetUsers();
   const u = users.find(x=>x.id===userId);
-  if(u){ u.role = role; await dbSaveUser(u); }
-  if(CURRENT_USER && CURRENT_USER.id===userId) CURRENT_USER.role = role;
+  if(u){
+    u.role = role;
+    // only Service Group Admins (leaders) carry a single assigned group
+    if(role !== 'leader') u.adminGroup = null;
+    await dbSaveUser(u);
+  }
+  if(CURRENT_USER && CURRENT_USER.id===userId){ CURRENT_USER.role = role; if(role!=='leader') CURRENT_USER.adminGroup = null; }
   renderNav();
+  renderAdmin(document.getElementById('main'));
+}
+
+async function changeAdminGroup(userId, group){
+  const users = await dbGetUsers();
+  const u = users.find(x=>x.id===userId);
+  if(u){ u.adminGroup = group || null; await dbSaveUser(u); }
+  if(CURRENT_USER && CURRENT_USER.id===userId) CURRENT_USER.adminGroup = group || null;
+  renderUserbar();
 }
 
 /* ---------------- UTIL ---------------- */
