@@ -9,8 +9,9 @@
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root{
-    --royal:#0B1E4D;
-    --royal-deep:#071433;
+    --royal:#8B0000;
+    --royal-deep:var(--royal);
+    --royal-hover:#6B0000;
     --gold:#F2A900;
     --gold-light:#FFC94D;
     --cream:#FFFFFF;
@@ -22,7 +23,21 @@
     --good:#2E6B47;
   }
   *{box-sizing:border-box;}
-  body{margin:0;font-family:'Inter',sans-serif;background:var(--cream);color:var(--ink);}
+  body{margin:0;font-family:'Inter',sans-serif;background:var(--cream);color:var(--ink);position:relative;}
+  body::before{
+    content:"";
+    position:fixed;
+    inset:0;
+    background-image:url('Logo.png');
+    background-repeat:no-repeat;
+    background-position:center;
+    background-size:min(70vw,520px);
+    opacity:0.06;
+    filter:grayscale(1);
+    pointer-events:none;
+    z-index:0;
+  }
+  .app{position:relative;z-index:1;}
   h1,h2,h3,h4{font-family:'Playfair Display',serif;letter-spacing:0.01em;margin:0 0 8px 0;color:var(--royal-deep);}
   p{line-height:1.6;}
   button{font-family:inherit;cursor:pointer;}
@@ -30,7 +45,7 @@
   .app{max-width:100%;margin:0 auto;min-height:100vh;background:var(--white);}
 
   /* HEADER */
-  header.site{background:var(--royal);color:var(--white);padding:16px 20px;position:relative;overflow:visible;display:flex;align-items:center;justify-content:space-between;gap:12px;}
+  header.site{background:var(--royal);color:var(--white);padding:16px 20px;position:relative;overflow:visible;display:flex;align-items:center;justify-content:space-between;gap:12px;box-shadow:0 2px 10px rgba(0,0,0,0.25);}
   
   .brand{display:flex;align-items:center;gap:14px;position:relative;z-index:1;}
   .crest{width:50px;height:50px;border-radius:50%;background:var(--white);display:flex;align-items:center;justify-content:center;font-weight:bold;color:var(--royal);font-size:18px;flex:none;overflow:hidden;}
@@ -62,7 +77,7 @@
   @keyframes fade{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:none;}}
 
   .card{background:var(--white);border:1px solid var(--line);border-radius:10px;padding:20px;margin-bottom:18px;}
-  .hero{background:var(--royal);color:var(--white);border-radius:14px;padding:36px 28px;margin-bottom:24px;position:relative;overflow:hidden;}
+  .hero{background:var(--royal);color:var(--white);border-radius:14px;padding:36px 28px;margin-bottom:24px;position:relative;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,0.2);}
   .hero h2{color:var(--white);font-size:28px;position:relative;}
   .hero p{color:rgba(255,255,255,0.9);max-width:560px;position:relative;}
   .hero .verse{color:var(--gold-light);font-weight:bold;margin-top:14px;font-size:14px;position:relative;}
@@ -105,7 +120,7 @@
   .radio-row input,.check-row input{width:auto;}
 
   .btn{display:inline-block;background:var(--royal);color:var(--white);border:none;padding:11px 20px;border-radius:7px;font-size:14px;letter-spacing:0.03em;margin-top:16px;}
-  .btn:hover{background:var(--royal-deep);}
+  .btn:hover{background:var(--royal-hover);}
   .btn.gold{background:var(--gold);color:var(--royal-deep);font-weight:bold;}
   .btn.gold:hover{background:var(--gold-light);}
   .btn.outline{background:transparent;color:var(--royal);border:1.5px solid var(--royal);}
@@ -138,8 +153,8 @@
   .modal h3{margin-bottom:10px;}
   .close-x{float:right;background:none;border:none;font-size:20px;color:var(--grey);}
 
-  .footer{background:var(--royal-deep);color:rgba(255,255,255,0.7);padding:20px 26px;font-size:13px;text-align:center;}
-  .footer .gold-line{height:3px;background:var(--gold);margin-bottom:14px;}
+  .footer{background:var(--royal);color:rgba(255,255,255,0.7);padding:20px 26px;font-size:13px;text-align:center;}
+  .footer .copyright{margin-top:12px;font-size:11px;color:rgba(255,255,255,0.5);}
 
   .list-item{border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin-bottom:10px;background:#FCFBF7;}
   .list-item .meta{font-size:12px;color:var(--grey);margin-top:4px;}
@@ -171,9 +186,9 @@
   <main id="main"></main>
 
   <div class="footer">
-    <div class="gold-line"></div>
     Winners Chapel International, Ruiru &middot; Liberating people through the Word of Faith<br>
     Sunday service 9:00 am to 11:30 am
+    <div class="copyright">&copy; 2026 Winners Chapel International, Ruiru</div>
   </div>
 </div>
 
@@ -465,6 +480,32 @@ async function renderHome(main){
 /* ---------------- NEW PERSON INTAKE ---------------- */
 async function renderNewPerson(main){
   main.innerHTML = `
+    <div class="card" style="text-align:center;max-width:520px;margin:0 auto;">
+      <h2>Welcome! Tell Us Why You Are Here</h2>
+      <p>This helps us take care of you the right way.</p>
+      <div class="grid2" style="margin-top:18px;">
+        <div class="card" style="margin-bottom:0;">
+          <h3>Just Visiting</h3>
+          <p style="font-size:14px;color:var(--grey)">I am checking things out today. Tell us a bit about yourself so we can welcome you well.</p>
+          <button class="btn gold" onclick="renderVisitorIntake()">I Am Just Visiting</button>
+        </div>
+        <div class="card" style="margin-bottom:0;">
+          <h3>Become A Member</h3>
+          <p style="font-size:14px;color:var(--grey)">I already know I want to call this church my home. Show me how to sign up.</p>
+          <button class="btn" onclick="showTab('membership')">I Want To Become A Member</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderVisitorIntake(){
+  const main = document.getElementById('main');
+  renderVisitorForm(main);
+}
+
+async function renderVisitorForm(main){
+  main.innerHTML = `
     <div class="card">
       <h2>Welcome, We Are Glad You Are Here</h2>
       <p style="color:var(--grey)">Please share a few details about yourself. This helps our team welcome you properly and follow up with you in the weeks ahead.</p>
@@ -496,12 +537,6 @@ async function renderNewPerson(main){
         <label><input type="radio" name="npBorn" value="Not sure"> Not sure</label>
       </div>
 
-      <label>What is your interest today?</label>
-      <div class="radio-row">
-        <label><input type="radio" name="npIntent" value="visitor" checked onclick="toggleVisitorFields()"> I am just visiting</label>
-        <label><input type="radio" name="npIntent" value="member" onclick="toggleVisitorFields()"> I want to become a member</label>
-      </div>
-
       <label>What did you love most about the service?</label>
       <div class="check-row">
         <label><input type="checkbox" name="npLove" value="The Word"> The Word</label>
@@ -511,24 +546,16 @@ async function renderNewPerson(main){
         <label><input type="checkbox" name="npLove" value="Hospitality"> Hospitality</label>
       </div>
 
-      <div id="npVisitorFields">
-        <label>Where do you come from (your home area, or the church you normally attend)?</label>
-        <input type="text" id="npAddress">
+      <label>Where do you come from (your home area, or the church you normally attend)?</label>
+      <input type="text" id="npAddress">
 
-        <label>Do you have a prayer request? This is kept strictly confidential and is only seen by the pastor and the leader of the Kingdom Advancement Prayer Squad.</label>
-        <textarea id="npPrayer" placeholder="Optional. Share only what you are comfortable sharing."></textarea>
-        <p style="font-size:12px;color:var(--grey);margin-top:4px">Prefer to talk instead of writing? Sign up and book a counselling session with the pastor.</p>
-      </div>
+      <label>Do you have a prayer request? This is kept strictly confidential and is only seen by the pastor and the leader of the Kingdom Advancement Prayer Squad.</label>
+      <textarea id="npPrayer" placeholder="Optional. Share only what you are comfortable sharing."></textarea>
+      <p style="font-size:12px;color:var(--grey);margin-top:4px">Prefer to talk instead of writing? Sign up and book a counselling session with the pastor.</p>
 
       <button class="btn gold" onclick="submitNewPerson()">Submit My Details</button>
     </div>
   `;
-  toggleVisitorFields();
-}
-
-function toggleVisitorFields(){
-  const intent = document.querySelector('input[name=npIntent]:checked').value;
-  document.getElementById('npVisitorFields').style.display = intent==='visitor' ? 'block':'none';
 }
 
 async function submitNewPerson(){
@@ -541,7 +568,7 @@ async function submitNewPerson(){
   const how = document.getElementById('npHow').value;
   const inviter = document.getElementById('npInviter').value.trim();
   const born = document.querySelector('input[name=npBorn]:checked').value;
-  const intent = document.querySelector('input[name=npIntent]:checked').value;
+  const intent = 'visitor';
   const loves = Array.from(document.querySelectorAll('input[name=npLove]:checked')).map(i=>i.value);
   const address = document.getElementById('npAddress') ? document.getElementById('npAddress').value.trim() : '';
   const prayer = document.getElementById('npPrayer') ? document.getElementById('npPrayer').value.trim() : '';
@@ -557,14 +584,14 @@ async function submitNewPerson(){
   idx.push(record.id);
   await sSet('visitor_index', idx);
 
-  if(intent==='member'){
-    showTab('membership');
-  } else {
+  {
     document.getElementById('main').innerHTML = `
       <div class="card">
         <h2>Thank You, ${escapeHTML(name)}</h2>
         <p>We are so glad you visited today. A member of our follow up team will be in touch with you soon. If you shared a prayer request, be assured it stays strictly between the pastor and the leader of the Kingdom Advancement Prayer Squad.</p>
-        <button class="btn" onclick="showTab('home')">Back To Home</button>
+        <div class="note">Enjoyed being with us? You are welcome to take the next step whenever you are ready.</div>
+        <button class="btn gold" onclick="showTab('membership')">Actually, I'd Like To Become A Member</button>
+        <button class="btn outline" onclick="showTab('home')">Back To Home</button>
       </div>
     `;
   }
