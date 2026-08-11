@@ -554,6 +554,30 @@ const TABS = [
 
 let ACTIVE_TAB = 'home';
 
+// Keeps a member logged in across page refreshes. Only the user's id is
+// stored (not the password) — on load we look the user back up from the
+// database so their role/groups/etc are always fresh, not stale/cached.
+const SESSION_KEY = 'wc_current_user_id_v1';
+const ACTIVE_TAB_KEY = 'wc_active_tab_v1';
+function persistSession(){
+  try{
+    if(CURRENT_USER) localStorage.setItem(SESSION_KEY, CURRENT_USER.id);
+    else localStorage.removeItem(SESSION_KEY);
+  }catch(e){}
+}
+function persistActiveTab(id){
+  try{ localStorage.setItem(ACTIVE_TAB_KEY, id); }catch(e){}
+}
+async function restoreSession(){
+  let userId;
+  try{ userId = localStorage.getItem(SESSION_KEY); }catch(e){ userId = null; }
+  if(!userId) return;
+  const users = await dbGetUsers();
+  const u = users.find(x=>x.id===userId);
+  if(u) CURRENT_USER = u;
+  else { try{ localStorage.removeItem(SESSION_KEY); }catch(e){} }
+}
+
 // Phone numbers of church leadership. Anyone who signs up with one of these
 // numbers automatically receives the Super Admin role - no shared password
 // is stored in this file, each person still sets their own password when
@@ -567,9 +591,23 @@ async function init(){
   if(savedSettings) SETTINGS = Object.assign(SETTINGS, savedSettings);
   else await dbSaveSettings(SETTINGS);
 
+  await restoreSession();
+
+  let startTab = 'home';
+  try{
+    const savedTab = localStorage.getItem(ACTIVE_TAB_KEY);
+    if(savedTab){
+      // only resume a tab that's actually valid for the restored login state
+      const tabDef = TABS.find(t=>t.id===savedTab);
+      const allowed = tabDef && !(tabDef.adminOnly && !(CURRENT_USER && ['super_admin','leader'].includes(CURRENT_USER.role)))
+        && !(tabDef.memberOnly && !CURRENT_USER) && !(tabDef.guestOnly && CURRENT_USER);
+      if(allowed) startTab = savedTab;
+    }
+  }catch(e){}
+
   renderNav();
   renderUserbar();
-  showTab('home');
+  showTab(startTab);
   restoreSignupSession();
 }
 
@@ -634,6 +672,7 @@ function roleLabel(r, adminGroup){
 
 async function showTab(id){
   ACTIVE_TAB = id;
+  persistActiveTab(id);
   renderNav();
   const main = document.getElementById('main');
   main.innerHTML = '<p style="color:#999">Loading...</p>';
@@ -782,6 +821,7 @@ async function doLogin(){
     return;
   }
   CURRENT_USER = u;
+  persistSession();
   closeModal();
   renderUserbar();
   renderNav();
@@ -966,6 +1006,7 @@ async function doSignup(){
   const newUser = {id:uid(), name, phone, email, password:pass, role, groups: [], adminGroup:null};
   await dbSaveUser(newUser);
   CURRENT_USER = newUser;
+  persistSession();
   closeModal();
   renderUserbar();
   renderNav();
@@ -974,6 +1015,7 @@ async function doSignup(){
 
 function logout(){
   CURRENT_USER = null;
+  persistSession();
   renderUserbar();
   renderNav();
   showTab('home');
