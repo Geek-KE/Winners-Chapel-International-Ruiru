@@ -1737,15 +1737,23 @@ function escapeHTML(str){
 init();
 </script>
 <script>
-  window.addEventListener('load', function(){
-    var pre = document.getElementById('preloader');
-    if(pre){
+  (function(){
+    var PRELOADER_MIN_MS = 900; // guarantees the pulsating logo is visible even on fast loads
+    var startedAt = Date.now();
+    function hidePreloader(){
+      var pre = document.getElementById('preloader');
+      if(!pre) return;
+      var elapsed = Date.now() - startedAt;
+      var wait = Math.max(0, PRELOADER_MIN_MS - elapsed);
       setTimeout(function(){
         pre.classList.add('loaded');
         setTimeout(function(){ pre.remove(); }, 450);
-      }, 250);
+      }, wait);
     }
-  });
+    window.addEventListener('load', hidePreloader);
+    // Fallback in case the load event never fires (e.g. a blocked resource)
+    setTimeout(hidePreloader, 6000);
+  })();
 </script>
 </body>
 </html>
