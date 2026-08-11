@@ -714,6 +714,7 @@ function doOpenSignupModal(){
     <button class="close-x" onclick="closeModal()">&times;</button>
     <h3>Church Member Sign Up</h3>
     <p style="font-size:13px;color:var(--grey)">Create your account so you can check in for service, submit testimonies, and stay connected with your service groups. You can choose your groups afterwards from your account.</p>
+    <p style="font-size:13px;margin-top:-4px;">Already have an account? <a href="#" onclick="openLogin();return false;">Log in here</a></p>
     <div id="signupMsg"></div>
     <label>Full Name</label>
     <input type="text" id="suName">
@@ -742,11 +743,11 @@ async function doSignup(){
   }
   const users = await dbGetUsers();
   if(users.find(u=>u.phone===phone)){
-    document.getElementById('signupMsg').innerHTML = '<div class="msg err">An account with this phone number already exists. Please log in instead.</div>';
+    document.getElementById('signupMsg').innerHTML = '<div class="msg err">An account with this phone number already exists. <a href="#" onclick="openLogin();return false;" style="color:inherit;font-weight:bold;text-decoration:underline;">Log in instead</a></div>';
     return;
   }
   if(users.find(u=>u.email && u.email.toLowerCase()===email.toLowerCase())){
-    document.getElementById('signupMsg').innerHTML = '<div class="msg err">An account with this email already exists. Please log in instead.</div>';
+    document.getElementById('signupMsg').innerHTML = '<div class="msg err">An account with this email already exists. <a href="#" onclick="openLogin();return false;" style="color:inherit;font-weight:bold;text-decoration:underline;">Log in instead</a></div>';
     return;
   }
   const newUser = {id:uid(), name, phone, email, password:pass, role:'member', groups: []};
