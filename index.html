@@ -465,11 +465,11 @@ let CURRENT_USER = null; // {id,name,phone,role,groups}
 let SETTINGS = { teacherPhone:'0700 000 000', teacherName:'Sis. Grace (Believers Foundation Class Coordinator)',
   churchLat:-1.1547, churchLng:36.9639, meetingsOpen:{} , checkinLabel:'' };
 
-const GROUPS = ['Choir','Sanctuary Keeping','Sunday School Teachers','Security','CCU and Crowd Control','Hospitality','KAPS (Kingdom Advancement Prayer Squad)','Follow Up Team','Joel\'s Company'];
+const GROUPS = ['Choir','Sanctuary Keeping','Sunday School Teachers','Security','Crowd Control (CCU)','Hospitality','Technical/Media','KAPS (Kingdom Advancement Prayer Squad)','Follow Up Team','Joel\'s Company'];
 
 const TABS = [
   {id:'home', label:'Home'},
-  {id:'newperson', label:'I Am New Here'},
+  {id:'newperson', label:'I Am New Here', guestOnly:true},
   {id:'testimony', label:'Testimonies'},
   {id:'about', label:'About Us'},
   {id:'account', label:'My Account'},
@@ -508,6 +508,7 @@ function renderNav(){
   TABS.forEach(t=>{
     if(t.adminOnly && !(CURRENT_USER && ['super_admin','leader'].includes(CURRENT_USER.role))) return;
     if(t.memberOnly && !CURRENT_USER) return;
+    if(t.guestOnly && CURRENT_USER) return;
     const b = document.createElement('button');
     b.textContent = t.label;
     b.className = 'navlink' + (ACTIVE_TAB===t.id ? ' active':'');
@@ -653,7 +654,7 @@ async function doLogin(){
   closeModal();
   renderUserbar();
   renderNav();
-  showTab('account');
+  showTab('home');
 }
 
 function openSignup(){
@@ -706,7 +707,7 @@ async function doSignup(){
   closeModal();
   renderUserbar();
   renderNav();
-  showTab('account');
+  showTab('home');
 }
 
 function logout(){
@@ -720,10 +721,10 @@ function logout(){
 async function renderHome(main){
   main.innerHTML = `
     <div class="hero">
-      <h2>Welcome Home</h2>
-      <p>We are glad you found us. Winners Chapel International Ruiru exists to see lives transformed by the Word of God, and to raise people who walk in their full, God given potential.</p>
+      <h2>Welcome to the Home of Signs and Wonders</h2>
+      <p>We are happy you are worshipping with us today. Winners Chapel International Ruiru exists to see lives transformed by the Word of God, and to raise people who walk in their full, God given potential.</p>
       <div class="verse">Liberating the world from all oppression of the devil, through the preaching of the Word of Faith.</div>
-      <button class="btn gold" onclick="showTab('newperson')">I Am Visiting For The First Time</button>
+      ${CURRENT_USER ? '' : '<button class="btn gold" onclick="showTab(\'newperson\')">I Am Visiting For The First Time</button>'}
       <button class="btn outline" onclick="showTab('about')">Learn About Us</button>
 
       <div class="grid3" style="margin-top:30px;text-align:center;">
@@ -742,6 +743,7 @@ async function renderHome(main){
       </div>
     </div>
 
+    ${CURRENT_USER ? '' : `
     <div class="grid2">
       <div class="card">
         <h3>New Here?</h3>
@@ -754,11 +756,13 @@ async function renderHome(main){
         <button class="btn outline" onclick="openLogin()">Member Login</button>
       </div>
     </div>
+    `}
   `;
 }
 
 /* ---------------- NEW PERSON INTAKE ---------------- */
 async function renderNewPerson(main){
+  if(CURRENT_USER){ showTab('home'); return; }
   main.innerHTML = `
     <div class="card" style="text-align:center;max-width:520px;margin:0 auto;">
       <h2>Welcome! Tell Us Why You Are Here</h2>
@@ -845,13 +849,13 @@ async function renderVisitorForm(main){
         <label><input type="radio" name="npBorn" value="Not sure"> Not sure</label>
       </div>
 
-      <label>What did you enjoy most in the service?</label>
-      <div class="radio-row">
-        <label><input type="radio" name="npEnjoyed" value="Praise"> Praise</label>
-        <label><input type="radio" name="npEnjoyed" value="Message"> Message</label>
-        <label><input type="radio" name="npEnjoyed" value="Prayer session"> Prayer session</label>
-        <label><input type="radio" name="npEnjoyed" value="Reception"> Reception</label>
-        <label><input type="radio" name="npEnjoyed" value="Co-ordinate of service"> Co-ordinate of service</label>
+      <label>What did you enjoy most in the service? (You may pick more than one)</label>
+      <div class="check-row">
+        <label><input type="checkbox" name="npEnjoyed" value="Praise"> Praise</label>
+        <label><input type="checkbox" name="npEnjoyed" value="Message"> Message</label>
+        <label><input type="checkbox" name="npEnjoyed" value="Prayer session"> Prayer session</label>
+        <label><input type="checkbox" name="npEnjoyed" value="Reception"> Reception</label>
+        <label><input type="checkbox" name="npEnjoyed" value="Co-ordinate of service"> Co-ordinate of service</label>
       </div>
 
       <label>Would you like to join this church?</label>
@@ -903,7 +907,7 @@ async function submitNewPerson(){
   const maritalEl = document.querySelector('input[name=npMarital]:checked');
   const howEl = document.querySelector('input[name=npHow]:checked');
   const joinEl = document.querySelector('input[name=npJoin]:checked');
-  const enjoyedEl = document.querySelector('input[name=npEnjoyed]:checked');
+  const enjoyedVals = Array.from(document.querySelectorAll('input[name=npEnjoyed]:checked')).map(i=>i.value);
 
   const gender = genderEl ? genderEl.value : '';
   const maritalStatus = maritalEl ? maritalEl.value : '';
@@ -912,7 +916,7 @@ async function submitNewPerson(){
   const howOther = document.getElementById('npHowOther') ? document.getElementById('npHowOther').value.trim() : '';
   const inviter = document.getElementById('npInviter').value.trim();
   const born = document.querySelector('input[name=npBorn]:checked').value;
-  const enjoyed = enjoyedEl ? enjoyedEl.value : '';
+  const enjoyed = enjoyedVals.join(', ');
   const address = document.getElementById('npAddress') ? document.getElementById('npAddress').value.trim() : '';
   const joinInterest = joinEl ? joinEl.value : '';
   const joinOther = document.getElementById('npJoinOther') ? document.getElementById('npJoinOther').value.trim() : '';
@@ -957,7 +961,7 @@ async function renderMembership(main){
       </div>
 
       <div class="list-item"><strong>Step 3. Choose Your Service Groups</strong>
-        <p>You will then be welcomed to serve in one or more of our groups: Choir, Sanctuary Keeping, Sunday School Teachers, Security, CCU and Crowd Control, Hospitality, KAPS (which includes the Follow Up Team), or Joel's Company. You can choose more than one group from your account once you sign up.</p>
+        <p>You will then be welcomed to serve in one or more of our groups: Choir, Sanctuary Keeping, Sunday School Teachers, Security, Crowd Control (CCU), Hospitality, Technical/Media, KAPS (which includes the Follow Up Team), or Joel's Company. You can choose more than one group from your account once you sign up.</p>
       </div>
 
       <div class="list-item"><strong>Step 4. Ongoing Follow Up</strong>
@@ -1020,6 +1024,7 @@ async function renderCheckin(main){
   main.innerHTML = `
     <div class="card">
       <h2>Check In</h2>
+      <p style="color:var(--grey);font-size:14px">There are two kinds of check in: the General Sunday Service check in, and Group Meeting check ins, which a service group leader can open on any day.</p>
       <div class="check-row" id="checkinSubTabs">
         <button class="btn small" data-sub="attendance" onclick="setCheckinSub('attendance')">Sunday Service</button>
         <button class="btn small outline" data-sub="meetings" onclick="setCheckinSub('meetings')">Group Meetings</button>
@@ -1239,7 +1244,6 @@ async function renderMeetings(main){
   main.innerHTML = `
     <div class="card">
       <h2>Service Group Meetings</h2>
-      <p style="color:var(--grey);font-size:14px">Group leaders open check in when a meeting begins. Members of the group can then check in for that meeting.</p>
       ${controls || '<p>You are not yet part of a service group. Join one from My Account.</p>'}
     </div>
   `;
@@ -1267,7 +1271,7 @@ async function renderAbsence(main){
   main.innerHTML = `
     <div class="card">
       <h2>Could Not Make It To Church?</h2>
-      <p style="color:var(--grey);font-size:14px">If you missed a service, you can let us know why without your name being shown publicly. Only a super admin is able to see who wrote a note, and only when needed for pastoral care.</p>
+      <p style="color:var(--grey);font-size:14px">If you missed a service, you can let us know why without your name being shown publicly.</p>
       <label>What kept you away?</label>
       <textarea id="absText" placeholder="Write anonymously, this will not show your name to other members"></textarea>
       <button class="btn gold" onclick="submitAbsence()">Submit Note</button>
