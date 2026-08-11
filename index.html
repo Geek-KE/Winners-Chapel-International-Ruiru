@@ -427,6 +427,15 @@ async function dbSetTestimonyStatus(id, status){
   const t = rows.find(r=>r.id===id);
   if(t){ t.status = status; if(approvedAt) t.approvedAt = approvedAt; await localSet('testimonies', rows); }
 }
+async function dbDeleteTestimony(id){
+  if(supabaseClient){
+    const { error } = await supabaseClient.from('testimonies').delete().eq('id',id);
+    if(error) console.error('delete testimony failed', error);
+    return;
+  }
+  const rows = await localAll('testimonies');
+  await localSet('testimonies', rows.filter(r=>r.id!==id));
+}
 
 // Returns only testimonies that are approved AND still within their 3 month
 // live window. Any approved testimony past that window gets flipped to
@@ -595,10 +604,20 @@ const TABS = [
   {id:'testimony', label:'Testimonies'},
   {id:'about', label:'About Us'},
   {id:'account', label:'My Account'},
-  {id:'membership', label:'Covenant Path', memberOnly:true},
+  {id:'membership', label:'Covenant Path', guestOnly:true},
   {id:'checkin', label:'Check In', memberOnly:true},
+  {id:'followup', label:'Follow Up', memberOnly:true, followUpOnly:true},
   {id:'admin', label:'Admin', adminOnly:true}
 ];
+
+// Whether the current user is allowed to see/use the Follow Up tool: Super
+// Admins and Service Group Admins always can, plus any member who has joined
+// the Follow Up Team or KAPS group.
+function canUseFollowUp(){
+  if(!CURRENT_USER) return false;
+  if(['super_admin','leader'].includes(CURRENT_USER.role)) return true;
+  return (CURRENT_USER.groups||[]).some(g=>g.includes('Follow Up') || g.includes('KAPS'));
+}
 
 let ACTIVE_TAB = 'home';
 
@@ -648,7 +667,8 @@ async function init(){
       // only resume a tab that's actually valid for the restored login state
       const tabDef = TABS.find(t=>t.id===savedTab);
       const allowed = tabDef && !(tabDef.adminOnly && !(CURRENT_USER && ['super_admin','leader'].includes(CURRENT_USER.role)))
-        && !(tabDef.memberOnly && !CURRENT_USER) && !(tabDef.guestOnly && CURRENT_USER);
+        && !(tabDef.memberOnly && !CURRENT_USER) && !(tabDef.guestOnly && CURRENT_USER)
+        && !(tabDef.followUpOnly && !canUseFollowUp());
       if(allowed) startTab = savedTab;
     }
   }catch(e){}
@@ -666,6 +686,7 @@ function renderNav(){
     if(t.adminOnly && !(CURRENT_USER && ['super_admin','leader'].includes(CURRENT_USER.role))) return;
     if(t.memberOnly && !CURRENT_USER) return;
     if(t.guestOnly && CURRENT_USER) return;
+    if(t.followUpOnly && !canUseFollowUp()) return;
     const b = document.createElement('button');
     b.textContent = t.label;
     b.className = 'navlink' + (ACTIVE_TAB===t.id ? ' active':'');
@@ -726,7 +747,7 @@ async function showTab(id){
   main.innerHTML = '<p style="color:#999">Loading...</p>';
   const renderers = {
     home: renderHome, newperson: renderNewPerson, membership: renderMembership,
-    account: renderAccount, checkin: renderCheckin, testimony: renderTestimony,
+    account: renderAccount, checkin: renderCheckin, followup: renderFollowup, testimony: renderTestimony,
     about: renderAbout, admin: renderAdmin
   };
   main.innerHTML = '';
@@ -855,8 +876,88 @@ function openLogin(){
     <label>Password</label>
     <input type="password" id="loginPass">
     <button class="btn gold" onclick="doLogin()">Log In</button>
-    <p style="margin-top:14px;font-size:13px;">No account yet? <a href="#" onclick="openSignup();return false;">Sign up here</a></p>
+    <p style="margin-top:14px;font-size:13px;">
+      No account yet? <a href="#" onclick="openSignup();return false;">Sign up here</a><br>
+      Forgotten your password? <a href="#" onclick="openForgotPassword();return false;">Reset it here</a>
+    </p>
   `);
+}
+
+/* ---- FORGOT PASSWORD (email OTP, reuses the same code infrastructure as sign up) ---- */
+let RESET_OTP = null; // { phone, email, code, expiresAt }
+function openForgotPassword(){
+  openModalHTML(`
+    <button class="close-x" onclick="closeModal()">&times;</button>
+    <h3>Reset Your Password</h3>
+    <p style="font-size:13px;color:var(--grey)">Enter the phone number on your account. We will send a 6-digit code to the email address you signed up with.</p>
+    <div id="fpMsg"></div>
+    <label>Phone Number</label>
+    <input type="tel" id="fpPhone" placeholder="e.g. 0722000000">
+    <button class="btn gold" onclick="sendResetOtp()">Send Reset Code</button>
+    <p style="margin-top:14px;font-size:13px;"><a href="#" onclick="openLogin();return false;">Back to login</a></p>
+  `);
+}
+
+async function sendResetOtp(){
+  const phone = document.getElementById('fpPhone').value.trim();
+  const msgEl = document.getElementById('fpMsg');
+  if(!phone){ msgEl.innerHTML = '<div class="msg err">Please enter your phone number.</div>'; return; }
+  const users = await dbGetUsers();
+  const u = users.find(x=>x.phone===phone);
+  if(!u || !u.email){
+    msgEl.innerHTML = '<div class="msg err">We could not find an account with that phone number and an email on file. Please contact church leadership for help.</div>';
+    return;
+  }
+  msgEl.innerHTML = '<div class="msg ok">Sending code&hellip;</div>';
+  const code = generateOtpCode();
+  RESET_OTP = { phone, email:u.email, code, expiresAt: Date.now() + 10*60000 };
+  if(emailjsReady){
+    try{
+      await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_OTP_TEMPLATE_ID, {
+        to_email: u.email, email: u.email, passcode: code, code: code, otp_code: code
+      });
+    }catch(err){
+      msgEl.innerHTML = `<div class="msg err">Could not send the code: ${escapeHTML((err && (err.text||err.message)) || 'please try again.')}</div>`;
+      return;
+    }
+  }
+  showResetCodeStep();
+}
+
+function showResetCodeStep(){
+  const maskedEmail = RESET_OTP.email.replace(/^(.{2}).*(@.*)$/, (m,a,b)=>a+'***'+b);
+  openModalHTML(`
+    <button class="close-x" onclick="closeModal()">&times;</button>
+    <h3>Enter Reset Code</h3>
+    <p style="font-size:13px;color:var(--grey)">We sent a 6-digit code to <strong>${escapeHTML(maskedEmail)}</strong>. Enter it below, then choose a new password. The code expires in 10 minutes.</p>
+    ${!emailjsReady ? `<div class="msg ok">Demo mode (EmailJS not configured yet): your code is <strong>${RESET_OTP.code}</strong></div>` : ''}
+    <div id="fpMsg"></div>
+    <label>Reset Code</label>
+    <input type="text" inputmode="numeric" maxlength="6" id="resetCode" placeholder="123456" autocomplete="one-time-code">
+    <label>New Password</label>
+    <input type="password" id="resetNewPass">
+    <button class="btn gold" onclick="doResetPassword()">Reset Password</button>
+    <p style="margin-top:14px;font-size:13px;"><a href="#" onclick="openForgotPassword();return false;">Start over</a></p>
+  `);
+}
+
+async function doResetPassword(){
+  const code = document.getElementById('resetCode').value.trim();
+  const newPass = document.getElementById('resetNewPass').value;
+  const msgEl = document.getElementById('fpMsg');
+  if(!RESET_OTP){ msgEl.innerHTML = '<div class="msg err">Please request a new code.</div>'; return; }
+  if(Date.now() > RESET_OTP.expiresAt){ msgEl.innerHTML = '<div class="msg err">This code has expired. Please request a new one.</div>'; return; }
+  if(code !== RESET_OTP.code){ msgEl.innerHTML = '<div class="msg err">That code was not recognized. Please try again.</div>'; return; }
+  if(!newPass || newPass.length < 4){ msgEl.innerHTML = '<div class="msg err">Please choose a password of at least 4 characters.</div>'; return; }
+  const users = await dbGetUsers();
+  const u = users.find(x=>x.phone===RESET_OTP.phone);
+  if(!u){ msgEl.innerHTML = '<div class="msg err">Account not found.</div>'; return; }
+  u.password = newPass;
+  await dbSaveUser(u);
+  await logActivity('reset_password', `Password reset for "${u.name}"`);
+  RESET_OTP = null;
+  msgEl.innerHTML = '<div class="msg ok">Password reset. You can now log in.</div>';
+  setTimeout(openLogin, 900);
 }
 
 async function doLogin(){
@@ -1416,8 +1517,7 @@ async function submitTestimony(){
 /* ---------------- CHECK IN HUB (attendance, meetings, follow up, absence) ---------------- */
 let CHECKIN_SUB = 'attendance';
 async function renderCheckin(main){
-  if(!requireLogin('Please log in to check in for service, meetings, follow up members, or leave an absence note.')) return;
-  const canFollowUp = ['super_admin','leader'].includes(CURRENT_USER.role) || CURRENT_USER.groups.some(g=>g.includes('Follow Up') || g.includes('KAPS'));
+  if(!requireLogin('Please log in to check in for service, meetings, or leave an absence note.')) return;
   main.innerHTML = `
     <div class="card">
       <h2>Check In</h2>
@@ -1425,7 +1525,6 @@ async function renderCheckin(main){
       <div class="check-row" id="checkinSubTabs">
         <button class="btn small" data-sub="attendance" onclick="setCheckinSub('attendance')">Sunday Service</button>
         <button class="btn small outline" data-sub="meetings" onclick="setCheckinSub('meetings')">Group Meetings</button>
-        ${canFollowUp ? `<button class="btn small outline" data-sub="followup" onclick="setCheckinSub('followup')">Follow Up</button>` : ''}
         <button class="btn small outline" data-sub="absence" onclick="setCheckinSub('absence')">Could Not Attend</button>
         <button class="btn small outline" data-sub="counselling" onclick="setCheckinSub('counselling')">Book Counselling</button>
       </div>
@@ -1441,7 +1540,7 @@ async function setCheckinSub(sub){
     b.className = 'btn small' + (b.dataset.sub===sub ? '' : ' outline');
   });
   const container = document.getElementById('checkinSubContent');
-  const map = {attendance: renderAttendance, meetings: renderMeetings, followup: renderFollowup, absence: renderAbsence, counselling: renderCounselling};
+  const map = {attendance: renderAttendance, meetings: renderMeetings, absence: renderAbsence, counselling: renderCounselling};
   await map[sub](container);
 }
 
@@ -1495,7 +1594,7 @@ async function confirmCounselling(id){
 
 async function renderFollowup(main){
   if(!requireLogin('Please log in to use the follow up tool.')) return;
-  const allowed = ['super_admin','leader'].includes(CURRENT_USER.role) || CURRENT_USER.groups.some(g=>g.includes('Follow Up') || g.includes('KAPS'));
+  const allowed = canUseFollowUp();
   if(!allowed){
     main.innerHTML = `<div class="card"><h2>Follow Up</h2><p>This section is for members of the Follow Up Team or KAPS group. Join that group from My Account if you serve in follow up.</p></div>`;
     return;
@@ -1576,6 +1675,15 @@ async function renderAttendance(main){
   const record = await dbGetAttendance(todayKey);
   const already = record.find(r=>r.userId===CURRENT_USER.id);
   const open = !!SETTINGS.generalCheckinOpen;
+
+  let manualOptionsHTML = '';
+  if(isLeaderOrAdmin){
+    const checkedInIds = new Set(record.map(r=>r.userId));
+    const allUsers = await dbGetUsers();
+    const available = allUsers.filter(u=>!checkedInIds.has(u.id)).sort((a,b)=>a.name.localeCompare(b.name));
+    manualOptionsHTML = available.map(u=>`<option value="${escapeHTML(u.id)}">${escapeHTML(u.name)}</option>`).join('');
+  }
+
   main.innerHTML = `
     <div class="card">
       <h2>Sunday Check In</h2>
@@ -1593,10 +1701,12 @@ async function renderAttendance(main){
       </table>
       ` : ''}
       ${isLeaderOrAdmin ? `
-        <h3 style="margin-top:24px">Check In Someone Without A Smartphone</h3>
-        <p style="color:var(--grey);font-size:13px">For members or visitors who cannot check in themselves. This records them straight into today's register.</p>
-        <label>Full Name</label>
-        <input type="text" id="manualAttName" placeholder="e.g. John Mwangi">
+        <h3 style="margin-top:24px">Check In On Someone's Behalf</h3>
+        <label>Choose a registered member</label>
+        <select id="manualAttUser">
+          <option value="">Select a member&hellip;</option>
+          ${manualOptionsHTML}
+        </select>
         <button class="btn small gold" style="margin-top:10px" onclick="manualCheckin()">Check In</button>
         <div id="manualAttMsg" style="margin-top:8px"></div>
       ` : ''}
@@ -1606,18 +1716,23 @@ async function renderAttendance(main){
 
 async function manualCheckin(){
   if(!CURRENT_USER || !['super_admin','leader'].includes(CURRENT_USER.role)) return;
-  const nameEl = document.getElementById('manualAttName');
-  const name = nameEl.value.trim();
+  const sel = document.getElementById('manualAttUser');
+  const userId = sel.value;
   const msg = document.getElementById('manualAttMsg');
-  if(!name){
-    msg.innerHTML = '<div class="msg err">Please enter a name.</div>';
+  if(!userId){
+    msg.innerHTML = '<div class="msg err">Please choose a member from the list.</div>';
+    return;
+  }
+  const users = await dbGetUsers();
+  const u = users.find(x=>x.id===userId);
+  if(!u){
+    msg.innerHTML = '<div class="msg err">That member could not be found.</div>';
     return;
   }
   const todayKey = new Date().toISOString().slice(0,10);
-  await dbAddAttendance(todayKey, {userId:'manual-'+uid(), name, distance:null, manual:true, checkedInBy:CURRENT_USER.name});
-  await logActivity('manual_checkin', `Checked in "${name}" for Sunday service (no smartphone)`);
-  msg.innerHTML = `<div class="msg ok">${escapeHTML(name)} checked in.</div>`;
-  nameEl.value = '';
+  await dbAddAttendance(todayKey, {userId:u.id, name:u.name, distance:null, manual:true, checkedInBy:CURRENT_USER.name});
+  await logActivity('manual_checkin', `Checked in "${u.name}" for Sunday service on their behalf`);
+  msg.innerHTML = `<div class="msg ok">${escapeHTML(u.name)} checked in.</div>`;
   refreshCheckinSub();
 }
 
@@ -1663,6 +1778,7 @@ async function renderMeetings(main){
   if(!requireLogin('Please log in to view group meetings.')) return;
   const isSuper = CURRENT_USER.role==='super_admin';
   const isLeaderOrAdmin = ['super_admin','leader'].includes(CURRENT_USER.role);
+  const allUsers = isLeaderOrAdmin ? await dbGetUsers() : [];
   let controls = '';
   for(const g of GROUPS){
     const open = SETTINGS.meetingsOpen[g];
@@ -1673,6 +1789,12 @@ async function renderMeetings(main){
     const todayKey = new Date().toISOString().slice(0,10);
     const record = await dbGetMeetingAttendance(g, todayKey);
     const already = record.find(r=>r.userId===CURRENT_USER.id);
+    let manualOptionsHTML = '';
+    if(canToggle){
+      const checkedInIds = new Set(record.map(r=>r.userId));
+      const available = allUsers.filter(u=>u.groups.includes(g) && !checkedInIds.has(u.id)).sort((a,b)=>a.name.localeCompare(b.name));
+      manualOptionsHTML = available.map(u=>`<option value="${escapeHTML(u.id)}">${escapeHTML(u.name)}</option>`).join('');
+    }
     controls += `
       <div class="list-item">
         <div style="display:flex;justify-content:space-between;align-items:center">
@@ -1684,9 +1806,12 @@ async function renderMeetings(main){
         ${isLeaderOrAdmin ? `<div class="meta" style="margin-top:8px">Checked in today: ${record.map(r=>escapeHTML(r.name)+(r.manual?' (manual)':'')).join(', ')||'None yet'}</div>` : ''}
         ${canToggle ? `
           <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line)">
-            <label style="margin-top:0">Check In Someone Without A Smartphone</label>
+            <label style="margin-top:0">Check In On Someone's Behalf</label>
             <div style="display:flex;gap:8px;flex-wrap:wrap">
-              <input type="text" id="manualMeetName-${g.replace(/[^a-zA-Z0-9]/g,'')}" placeholder="Full name" style="flex:1;min-width:160px">
+              <select id="manualMeetUser-${g.replace(/[^a-zA-Z0-9]/g,'')}" style="flex:1;min-width:160px">
+                <option value="">Select a member of this group&hellip;</option>
+                ${manualOptionsHTML}
+              </select>
               <button class="btn small gold" style="margin-top:0" onclick="manualCheckinMeeting('${g.replace(/'/g,"\\'")}')">Check In</button>
             </div>
             <div id="manualMeetMsg-${g.replace(/[^a-zA-Z0-9]/g,'')}" style="margin-top:6px"></div>
