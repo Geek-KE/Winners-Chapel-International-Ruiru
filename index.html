@@ -1,0 +1,1121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Winners Chapel International, Ruiru</title>
+<link rel="icon" type="image/png" href="Logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --royal:#0B1E4D;
+    --royal-deep:#071433;
+    --gold:#F2A900;
+    --gold-light:#FFC94D;
+    --cream:#FFFFFF;
+    --ink:#1B1B1B;
+    --grey:#6B6B76;
+    --line:#E7E9F0;
+    --white:#FFFFFF;
+    --danger:#8C2E2E;
+    --good:#2E6B47;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:'Inter',sans-serif;background:var(--cream);color:var(--ink);}
+  h1,h2,h3,h4{font-family:'Playfair Display',serif;letter-spacing:0.01em;margin:0 0 8px 0;color:var(--royal-deep);}
+  p{line-height:1.6;}
+  button{font-family:inherit;cursor:pointer;}
+  input,select,textarea{font-family:inherit;font-size:15px;}
+  .app{max-width:100%;margin:0 auto;min-height:100vh;background:var(--white);}
+
+  /* HEADER */
+  header.site{background:var(--royal);color:var(--white);padding:16px 20px;position:relative;overflow:visible;display:flex;align-items:center;justify-content:space-between;gap:12px;}
+  
+  .brand{display:flex;align-items:center;gap:14px;position:relative;z-index:1;}
+  .crest{width:50px;height:50px;border-radius:50%;background:var(--white);display:flex;align-items:center;justify-content:center;font-weight:bold;color:var(--royal);font-size:18px;flex:none;overflow:hidden;}
+  .crest img{width:100%;height:100%;object-fit:cover;}
+  .brand-text .kicker{color:var(--gold-light);font-size:11px;letter-spacing:0.16em;text-transform:uppercase;}
+  .brand-text h1{color:var(--white);font-size:19px;margin:2px 0 0 0;}
+  .header-right{display:flex;align-items:center;gap:10px;position:relative;z-index:1;}
+  .userbar{font-size:13px;color:var(--gold-light);text-align:right;}
+
+  /* HAMBURGER */
+  .hamburger{background:var(--gold);border:none;width:42px;height:42px;border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;flex:none;}
+  .hamburger span{display:block;width:20px;height:2px;background:var(--white);border-radius:2px;}
+
+  /* NAV as slide-down / side panel */
+  .nav-overlay{position:fixed;inset:0;background:rgba(42,36,21,0.35);display:none;z-index:60;}
+  .nav-overlay.active{display:block;}
+  nav.tabs{position:fixed;top:0;right:-280px;width:260px;height:100%;background:var(--white);z-index:61;box-shadow:-6px 0 24px rgba(0,0,0,0.15);transition:right .25s ease;display:flex;flex-direction:column;padding:18px 0;overflow-y:auto;}
+  nav.tabs.active{right:0;}
+  nav.tabs .nav-header{padding:0 18px 14px;border-bottom:1px solid var(--line);margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;}
+  nav.tabs .nav-header strong{color:var(--royal);}
+  nav.tabs .nav-close{background:none;border:none;font-size:20px;color:var(--grey);}
+  nav.tabs button.navlink{background:transparent;border:none;color:var(--ink);padding:13px 20px;font-size:14px;letter-spacing:0.02em;text-align:left;border-left:3px solid transparent;}
+  nav.tabs button.navlink:hover{background:#F2F4FA;}
+  nav.tabs button.navlink.active{color:var(--royal);border-left:3px solid var(--gold);background:#F2F4FA;font-weight:bold;}
+
+  main{padding:26px 40px;min-height:60vh;}
+  .panel{display:none;}
+  .panel.active{display:block;animation:fade .25s ease;}
+  @keyframes fade{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:none;}}
+
+  .card{background:var(--white);border:1px solid var(--line);border-radius:10px;padding:20px;margin-bottom:18px;}
+  .hero{background:var(--royal);color:var(--white);border-radius:14px;padding:36px 28px;margin-bottom:24px;position:relative;overflow:hidden;}
+  .hero h2{color:var(--white);font-size:28px;position:relative;}
+  .hero p{color:rgba(255,255,255,0.9);max-width:560px;position:relative;}
+  .hero .verse{color:var(--gold-light);font-weight:bold;margin-top:14px;font-size:14px;position:relative;}
+
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px;}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;}
+  @media(max-width:720px){.grid2,.grid3{grid-template-columns:1fr;}}
+
+  /* MOBILE POLISH */
+  @media(max-width:640px){
+    main{padding:16px;}
+    header.site{padding:12px 14px;}
+    .crest{width:40px;height:40px;font-size:15px;}
+    .brand-text .kicker{font-size:9px;}
+    .brand-text h1{font-size:15px;}
+    .hamburger{width:38px;height:38px;}
+    nav.tabs{width:82vw;right:-82vw;}
+    .hero{padding:24px 18px;border-radius:10px;}
+    .hero h2{font-size:21px;}
+    .hero p{font-size:14px;}
+    .hero .verse{font-size:13px;}
+    .card{padding:15px;border-radius:8px;}
+    .btn{width:100%;text-align:center;padding:12px 16px;}
+    .btn.small{width:auto;}
+    .grid3 .card,.grid2 .card{margin-bottom:0;}
+    table{display:block;overflow-x:auto;white-space:nowrap;}
+    .modal{padding:18px;border-radius:10px;}
+    .schedule-item{flex-direction:column;gap:2px;padding:10px 0;}
+    .check-row .btn.small{width:auto;}
+  }
+
+
+  label{display:block;font-size:13px;color:var(--grey);margin:14px 0 5px;font-weight:bold;}
+  input[type=text],input[type=tel],input[type=password],input[type=number],select,textarea{
+    width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:7px;background:#FCFBF7;color:var(--ink);
+  }
+  textarea{min-height:90px;resize:vertical;}
+  .radio-row,.check-row{display:flex;flex-wrap:wrap;gap:10px;margin-top:6px;}
+  .radio-row label,.check-row label{display:flex;align-items:center;gap:6px;font-weight:normal;color:var(--ink);background:#F4F1E7;padding:7px 12px;border-radius:20px;border:1px solid var(--line);margin:0;font-size:14px;cursor:pointer;}
+  .radio-row input,.check-row input{width:auto;}
+
+  .btn{display:inline-block;background:var(--royal);color:var(--white);border:none;padding:11px 20px;border-radius:7px;font-size:14px;letter-spacing:0.03em;margin-top:16px;}
+  .btn:hover{background:var(--royal-deep);}
+  .btn.gold{background:var(--gold);color:var(--royal-deep);font-weight:bold;}
+  .btn.gold:hover{background:var(--gold-light);}
+  .btn.outline{background:transparent;color:var(--royal);border:1.5px solid var(--royal);}
+  .btn.small{padding:7px 12px;font-size:12px;margin-top:0;}
+  .btn.danger{background:var(--danger);color:white;}
+
+  .badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;letter-spacing:0.04em;text-transform:uppercase;font-weight:bold;}
+  .badge.gold{background:#FCEACB;color:#8C6A0A;}
+  .badge.blue{background:#E1E6F5;color:var(--royal-deep);}
+  .badge.green{background:#DDEFE2;color:var(--good);}
+  .badge.grey{background:#EEEEEE;color:var(--grey);}
+
+  table{width:100%;border-collapse:collapse;font-size:14px;}
+  th,td{text-align:left;padding:9px 8px;border-bottom:1px solid var(--line);}
+  th{color:var(--grey);font-size:12px;text-transform:uppercase;letter-spacing:0.04em;}
+
+  .schedule-item{display:flex;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--line);}
+  .schedule-item:last-child{border-bottom:none;}
+  .schedule-item .day{font-weight:bold;color:var(--royal-deep);}
+  .schedule-item .time{color:var(--gold);font-weight:bold;}
+
+  .note{background:#FCEACB;border:1px solid #F2D48B;border-radius:8px;padding:12px 14px;font-size:13px;color:#7A5D06;margin-top:14px;}
+  .msg{padding:10px 14px;border-radius:7px;margin-bottom:14px;font-size:14px;}
+  .msg.ok{background:#DDEFE2;color:var(--good);}
+  .msg.err{background:#F6DEDE;color:var(--danger);}
+
+  .modal-bg{position:fixed;inset:0;background:rgba(11,20,64,0.55);display:none;align-items:center;justify-content:center;z-index:50;padding:16px;}
+  .modal-bg.active{display:flex;}
+  .modal{background:var(--white);border-radius:12px;padding:24px;max-width:420px;width:100%;max-height:88vh;overflow:auto;}
+  .modal h3{margin-bottom:10px;}
+  .close-x{float:right;background:none;border:none;font-size:20px;color:var(--grey);}
+
+  .footer{background:var(--royal-deep);color:rgba(255,255,255,0.7);padding:20px 26px;font-size:13px;text-align:center;}
+  .footer .gold-line{height:3px;background:var(--gold);margin-bottom:14px;}
+
+  .list-item{border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin-bottom:10px;background:#FCFBF7;}
+  .list-item .meta{font-size:12px;color:var(--grey);margin-top:4px;}
+  .tag-group{font-size:12px;color:var(--royal);font-weight:bold;}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header class="site">
+    <div class="brand">
+      <div class="crest"><img src="Logo.png" alt="Winners Chapel Ruiru logo" onerror="this.parentElement.textContent='WC'"></div>
+      <div class="brand-text">
+        <div class="kicker">Living Faith Church Worldwide</div>
+        <h1>Winners Chapel International, Ruiru</h1>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="userbar" id="userbar"></div>
+      <button class="hamburger" id="hamburgerBtn" onclick="toggleNav()" aria-label="Open menu"><span></span><span></span><span></span></button>
+    </div>
+  </header>
+
+  <div class="nav-overlay" id="navOverlay" onclick="toggleNav()"></div>
+  <nav class="tabs" id="tabs">
+    <div class="nav-header"><strong>Menu</strong><button class="nav-close" onclick="toggleNav()">&times;</button></div>
+  </nav>
+
+  <main id="main"></main>
+
+  <div class="footer">
+    <div class="gold-line"></div>
+    Winners Chapel International, Ruiru &middot; Liberating people through the Word of Faith<br>
+    Sunday service 9:00 am to 11:30 am
+  </div>
+</div>
+
+<div class="modal-bg" id="modalBg">
+  <div class="modal" id="modalContent"></div>
+</div>
+
+<script>
+/* ---------------- STORAGE HELPERS ---------------- */
+async function sGet(key, shared=true){
+  try{ const r = await window.storage.get(key, shared); return r ? JSON.parse(r.value) : null; }
+  catch(e){ return null; }
+}
+async function sSet(key, value, shared=true){
+  try{ return await window.storage.set(key, JSON.stringify(value), shared); }
+  catch(e){ console.error('storage set failed', e); return null; }
+}
+async function sList(prefix, shared=true){
+  try{ const r = await window.storage.list(prefix, shared); return r ? r.keys : []; }
+  catch(e){ return []; }
+}
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,8); }
+
+/* ---------------- APP STATE ---------------- */
+let CURRENT_USER = null; // {id,name,phone,role,groups}
+let SETTINGS = { teacherPhone:'0700 000 000', teacherName:'Sis. Grace (Believers Foundation Class Coordinator)',
+  churchLat:-1.1547, churchLng:36.9639, meetingsOpen:{} , checkinLabel:'' };
+
+const GROUPS = ['Choir','Sanctuary Keeping','Sunday School Teachers','Security','CCU and Crowd Control','Hospitality','KAPS (Kingdom Advancement Prayer Squad)','Follow Up Team','Joel\'s Company'];
+
+const TABS = [
+  {id:'home', label:'Home'},
+  {id:'newperson', label:'I Am New Here'},
+  {id:'testimony', label:'Testimonies'},
+  {id:'about', label:'About Us'},
+  {id:'account', label:'My Account'},
+  {id:'membership', label:'Membership Path', memberOnly:true},
+  {id:'checkin', label:'Check In', memberOnly:true},
+  {id:'admin', label:'Admin', adminOnly:true}
+];
+
+let ACTIVE_TAB = 'home';
+
+/* ---------------- INIT ---------------- */
+async function init(){
+  const savedSettings = await sGet('settings');
+  if(savedSettings) SETTINGS = Object.assign(SETTINGS, savedSettings);
+  else await sSet('settings', SETTINGS);
+
+  // seed default super admin accounts if none exist yet
+  const users = await sGet('users') || [];
+  if(users.length===0){
+    users.push({id:uid(), name:'Pastor', phone:'0720746132', password:'winners2026', role:'super_admin', groups:[]});
+    users.push({id:uid(), name:'Daniel', phone:'0705411249', password:'winners2026', role:'super_admin', groups:[]});
+    users.push({id:uid(), name:'Victor', phone:'0710991722', password:'winners2026', role:'super_admin', groups:[]});
+    await sSet('users', users);
+  }
+
+  renderNav();
+  renderUserbar();
+  showTab('home');
+}
+
+function renderNav(){
+  const nav = document.getElementById('tabs');
+  nav.innerHTML = '<div class="nav-header"><strong>Menu</strong><button class="nav-close" onclick="toggleNav()">&times;</button></div>';
+  TABS.forEach(t=>{
+    if(t.adminOnly && !(CURRENT_USER && ['super_admin','leader'].includes(CURRENT_USER.role))) return;
+    if(t.memberOnly && !CURRENT_USER) return;
+    const b = document.createElement('button');
+    b.textContent = t.label;
+    b.className = 'navlink' + (ACTIVE_TAB===t.id ? ' active':'');
+    b.onclick = ()=>{ showTab(t.id); closeNav(); };
+    nav.appendChild(b);
+  });
+  if(!CURRENT_USER){
+    const loginBtn = document.createElement('button');
+    loginBtn.textContent = 'Member Login';
+    loginBtn.className = 'navlink';
+    loginBtn.style.color = 'var(--royal)';
+    loginBtn.onclick = ()=>{ openLogin(); closeNav(); };
+    nav.appendChild(loginBtn);
+    const suBtn = document.createElement('button');
+    suBtn.textContent = 'Sign Up';
+    suBtn.className = 'navlink';
+    suBtn.style.color = 'var(--royal)';
+    suBtn.onclick = ()=>{ openSignup(); closeNav(); };
+    nav.appendChild(suBtn);
+  } else {
+    const outBtn = document.createElement('button');
+    outBtn.textContent = 'Log Out';
+    outBtn.className = 'navlink';
+    outBtn.style.color = 'var(--danger)';
+    outBtn.onclick = ()=>{ logout(); closeNav(); };
+    nav.appendChild(outBtn);
+  }
+}
+
+function toggleNav(){
+  document.getElementById('tabs').classList.toggle('active');
+  document.getElementById('navOverlay').classList.toggle('active');
+}
+function closeNav(){
+  document.getElementById('tabs').classList.remove('active');
+  document.getElementById('navOverlay').classList.remove('active');
+}
+
+function renderUserbar(){
+  const bar = document.getElementById('userbar');
+  if(CURRENT_USER){
+    bar.innerHTML = `${escapeHTML(CURRENT_USER.name)}<br><span style="color:var(--gold);font-size:11px">${roleLabel(CURRENT_USER.role)}</span>`;
+  } else {
+    bar.innerHTML = '';
+  }
+}
+
+function roleLabel(r){
+  return {member:'Member', leader:'Group Leader', super_admin:'Super Admin', visitor:'Visitor'}[r] || 'Member';
+}
+
+async function showTab(id){
+  ACTIVE_TAB = id;
+  renderNav();
+  const main = document.getElementById('main');
+  main.innerHTML = '<p style="color:#999">Loading...</p>';
+  const renderers = {
+    home: renderHome, newperson: renderNewPerson, membership: renderMembership,
+    account: renderAccount, checkin: renderCheckin, testimony: renderTestimony,
+    about: renderAbout, admin: renderAdmin
+  };
+  main.innerHTML = '';
+  await renderers[id](main);
+}
+
+function requireLogin(msg){
+  if(!CURRENT_USER){
+    const main = document.getElementById('main');
+    main.innerHTML = `
+      <div class="card" style="text-align:center;max-width:440px;margin:0 auto;">
+        <h2>Please Sign In</h2>
+        <p>${escapeHTML(msg || 'You need an account to use this feature.')}</p>
+        <button class="btn gold" onclick="openLogin()">I Have An Account, Log In</button>
+        <button class="btn outline" onclick="openSignup()">I Am New, Sign Up</button>
+      </div>
+    `;
+    return false;
+  }
+  return true;
+}
+
+function main_alert(text){
+  const main = document.getElementById('main');
+  const d = document.createElement('div');
+  d.className='msg err';
+  d.textContent = text;
+  main.prepend(d);
+}
+
+/* ---------------- MODAL / AUTH ---------------- */
+function closeModal(){ document.getElementById('modalBg').classList.remove('active'); }
+function openModalHTML(html){
+  document.getElementById('modalContent').innerHTML = html;
+  document.getElementById('modalBg').classList.add('active');
+}
+
+function openLogin(){
+  openModalHTML(`
+    <button class="close-x" onclick="closeModal()">&times;</button>
+    <h3>Member Login</h3>
+    <div id="loginMsg"></div>
+    <label>Phone Number</label>
+    <input type="tel" id="loginPhone" placeholder="e.g. 0722000000">
+    <label>Password</label>
+    <input type="password" id="loginPass">
+    <button class="btn gold" onclick="doLogin()">Log In</button>
+    <p style="margin-top:14px;font-size:13px;">No account yet? <a href="#" onclick="openSignup();return false;">Sign up here</a></p>
+  `);
+}
+
+async function doLogin(){
+  const phone = document.getElementById('loginPhone').value.trim();
+  const pass = document.getElementById('loginPass').value;
+  const users = await sGet('users') || [];
+  const u = users.find(x=>x.phone===phone && x.password===pass);
+  if(!u){
+    document.getElementById('loginMsg').innerHTML = '<div class="msg err">Phone or password not recognized.</div>';
+    return;
+  }
+  CURRENT_USER = u;
+  closeModal();
+  renderUserbar();
+  renderNav();
+  showTab('account');
+}
+
+function openSignup(){
+  openModalHTML(`
+    <button class="close-x" onclick="closeModal()">&times;</button>
+    <h3>Church Member Sign Up</h3>
+    <p style="font-size:13px;color:var(--grey)">Create your account so you can check in for service, submit testimonies, and stay connected with your service group.</p>
+    <div id="signupMsg"></div>
+    <label>Full Name</label>
+    <input type="text" id="suName">
+    <label>Phone Number</label>
+    <input type="tel" id="suPhone">
+    <label>Choose Password</label>
+    <input type="password" id="suPass">
+    <label>Service Group (optional, you can join later)</label>
+    <select id="suGroup">
+      <option value="">Not decided yet</option>
+      ${GROUPS.map(g=>`<option value="${g}">${g}</option>`).join('')}
+    </select>
+    <button class="btn gold" onclick="doSignup()">Create Account</button>
+  `);
+}
+
+async function doSignup(){
+  const name = document.getElementById('suName').value.trim();
+  const phone = document.getElementById('suPhone').value.trim();
+  const pass = document.getElementById('suPass').value;
+  const group = document.getElementById('suGroup').value;
+  if(!name || !phone || !pass){
+    document.getElementById('signupMsg').innerHTML = '<div class="msg err">Please fill in your name, phone number, and password.</div>';
+    return;
+  }
+  const users = await sGet('users') || [];
+  if(users.find(u=>u.phone===phone)){
+    document.getElementById('signupMsg').innerHTML = '<div class="msg err">An account with this phone number already exists. Please log in instead.</div>';
+    return;
+  }
+  const newUser = {id:uid(), name, phone, password:pass, role:'member', groups: group ? [group] : []};
+  users.push(newUser);
+  await sSet('users', users);
+  CURRENT_USER = newUser;
+  closeModal();
+  renderUserbar();
+  renderNav();
+  showTab('account');
+}
+
+function logout(){
+  CURRENT_USER = null;
+  renderUserbar();
+  renderNav();
+  showTab('home');
+}
+
+/* ---------------- HOME ---------------- */
+async function renderHome(main){
+  main.innerHTML = `
+    <div class="hero">
+      <h2>Welcome Home</h2>
+      <p>We are glad you found us. Winners Chapel International Ruiru exists to see lives transformed by the Word of God, and to raise people who walk in their full, God given potential.</p>
+      <div class="verse">Liberating the world from all oppression of the devil, through the preaching of the Word of Faith.</div>
+      <button class="btn gold" onclick="showTab('newperson')">I Am Visiting For The First Time</button>
+      <button class="btn outline" style="background:transparent;color:var(--white);border-color:var(--white)" onclick="showTab('about')">Learn About Us</button>
+    </div>
+
+    <div class="grid3">
+      <div class="card">
+        <h3>Sunday Service</h3>
+        <p style="color:var(--grey);font-size:14px">9:00 am to 11:30 am, with Workers Prayer at 8:00 am.</p>
+      </div>
+      <div class="card">
+        <h3>Midweek Service</h3>
+        <p style="color:var(--grey);font-size:14px">Wednesdays, 5:00 pm to 6:30 pm.</p>
+      </div>
+      <div class="card">
+        <h3>Kingdom Advancement Prayers</h3>
+        <p style="color:var(--grey);font-size:14px">Tuesdays, 5:00 pm to 6:00 pm.</p>
+      </div>
+    </div>
+
+    <div class="grid2">
+      <div class="card">
+        <h3>New Here?</h3>
+        <p>Tell us a bit about yourself so we can welcome you well and follow up with you.</p>
+        <button class="btn" onclick="showTab('newperson')">Get Started</button>
+      </div>
+      <div class="card">
+        <h3>Already A Member?</h3>
+        <p>Log in to check in for service, join your group meeting, or share your testimony.</p>
+        <button class="btn outline" onclick="openLogin()">Member Login</button>
+      </div>
+    </div>
+  `;
+}
+
+/* ---------------- NEW PERSON INTAKE ---------------- */
+async function renderNewPerson(main){
+  main.innerHTML = `
+    <div class="card">
+      <h2>Welcome, We Are Glad You Are Here</h2>
+      <p style="color:var(--grey)">Please share a few details about yourself. This helps our team welcome you properly and follow up with you in the weeks ahead.</p>
+      <div id="npMsg"></div>
+
+      <label>Full Name</label>
+      <input type="text" id="npName">
+
+      <label>Phone Number</label>
+      <input type="tel" id="npPhone">
+
+      <label>How did you come to be with us today?</label>
+      <select id="npHow">
+        <option value="Invited by a member">Invited by a member</option>
+        <option value="Evangelism outreach">Through an evangelism outreach</option>
+        <option value="Walked in">I just walked in</option>
+        <option value="Other">Other</option>
+      </select>
+
+      <div id="npInviterWrap">
+        <label>Who invited you? (name of the member, if applicable)</label>
+        <input type="text" id="npInviter" placeholder="Leave blank if not applicable">
+      </div>
+
+      <label>Are you born again?</label>
+      <div class="radio-row">
+        <label><input type="radio" name="npBorn" value="Yes" checked> Yes</label>
+        <label><input type="radio" name="npBorn" value="No"> No</label>
+        <label><input type="radio" name="npBorn" value="Not sure"> Not sure</label>
+      </div>
+
+      <label>What is your interest today?</label>
+      <div class="radio-row">
+        <label><input type="radio" name="npIntent" value="visitor" checked onclick="toggleVisitorFields()"> I am just visiting</label>
+        <label><input type="radio" name="npIntent" value="member" onclick="toggleVisitorFields()"> I want to become a member</label>
+      </div>
+
+      <label>What did you love most about the service?</label>
+      <div class="check-row">
+        <label><input type="checkbox" name="npLove" value="The Word"> The Word</label>
+        <label><input type="checkbox" name="npLove" value="Praise and Worship"> Praise and Worship</label>
+        <label><input type="checkbox" name="npLove" value="Choir"> Choir</label>
+        <label><input type="checkbox" name="npLove" value="Testimony"> Testimony</label>
+        <label><input type="checkbox" name="npLove" value="Hospitality"> Hospitality</label>
+      </div>
+
+      <div id="npVisitorFields">
+        <label>Where do you come from (your home area, or the church you normally attend)?</label>
+        <input type="text" id="npAddress">
+
+        <label>Do you have a prayer request? This is kept strictly confidential and is only seen by the pastor and the leader of the Kingdom Advancement Prayer Squad.</label>
+        <textarea id="npPrayer" placeholder="Optional. Share only what you are comfortable sharing."></textarea>
+        <p style="font-size:12px;color:var(--grey);margin-top:4px">Prefer to talk instead of writing? Sign up and book a counselling session with the pastor.</p>
+      </div>
+
+      <button class="btn gold" onclick="submitNewPerson()">Submit My Details</button>
+    </div>
+  `;
+  toggleVisitorFields();
+}
+
+function toggleVisitorFields(){
+  const intent = document.querySelector('input[name=npIntent]:checked').value;
+  document.getElementById('npVisitorFields').style.display = intent==='visitor' ? 'block':'none';
+}
+
+async function submitNewPerson(){
+  const name = document.getElementById('npName').value.trim();
+  const phone = document.getElementById('npPhone').value.trim();
+  if(!name || !phone){
+    document.getElementById('npMsg').innerHTML = '<div class="msg err">Please provide your name and phone number.</div>';
+    return;
+  }
+  const how = document.getElementById('npHow').value;
+  const inviter = document.getElementById('npInviter').value.trim();
+  const born = document.querySelector('input[name=npBorn]:checked').value;
+  const intent = document.querySelector('input[name=npIntent]:checked').value;
+  const loves = Array.from(document.querySelectorAll('input[name=npLove]:checked')).map(i=>i.value);
+  const address = document.getElementById('npAddress') ? document.getElementById('npAddress').value.trim() : '';
+  const prayer = document.getElementById('npPrayer') ? document.getElementById('npPrayer').value.trim() : '';
+
+  const record = {
+    id: uid(), name, phone, how, inviter, born, intent, loves, address, prayer,
+    submittedAt: new Date().toISOString(), followedUp: false
+  };
+  await sSet('visitors:'+record.id, record);
+
+  // maintain an index list of visitor ids for easy listing
+  const idx = await sGet('visitor_index') || [];
+  idx.push(record.id);
+  await sSet('visitor_index', idx);
+
+  if(intent==='member'){
+    showTab('membership');
+  } else {
+    document.getElementById('main').innerHTML = `
+      <div class="card">
+        <h2>Thank You, ${escapeHTML(name)}</h2>
+        <p>We are so glad you visited today. A member of our follow up team will be in touch with you soon. If you shared a prayer request, be assured it stays strictly between the pastor and the leader of the Kingdom Advancement Prayer Squad.</p>
+        <button class="btn" onclick="showTab('home')">Back To Home</button>
+      </div>
+    `;
+  }
+}
+
+/* ---------------- MEMBERSHIP PATH ---------------- */
+async function renderMembership(main){
+  main.innerHTML = `
+    <div class="card">
+      <h2>Your Path To Membership</h2>
+      <p>We are excited that you want to call Winners Chapel Ruiru your church home. Here is what the journey looks like.</p>
+
+      <div class="list-item"><strong>Step 1. Believers Foundation Class</strong>
+        <p>This class lays the foundation of your walk with Christ. Our class materials are currently not available online, so please contact the teacher in charge directly to register and get started.</p>
+        <div class="note">Believers Foundation Class Teacher: <strong>${escapeHTML(SETTINGS.teacherName)}</strong><br>
+        Phone: <strong>${escapeHTML(SETTINGS.teacherPhone)}</strong></div>
+      </div>
+
+      <div class="list-item"><strong>Step 2. Water Baptism</strong>
+        <p>After completing the foundation class, you will be prepared for water baptism, a public declaration of your new life in Christ.</p>
+      </div>
+
+      <div class="list-item"><strong>Step 3. Choose A Service Group</strong>
+        <p>You will then be welcomed to serve in one of our groups: Choir, Sanctuary Keeping, Sunday School Teachers, Security, CCU and Crowd Control, Hospitality, KAPS (which includes the Follow Up Team), or Joel's Company.</p>
+      </div>
+
+      <div class="list-item"><strong>Step 4. Ongoing Follow Up</strong>
+        <p>A member of our follow up team will stay in touch with you by call or message for about three to six months, until you are settled and strong in the church.</p>
+      </div>
+
+      <button class="btn gold" onclick="openSignup()">Create Your Member Account</button>
+    </div>
+  `;
+}
+
+/* ---------------- MY ACCOUNT ---------------- */
+async function renderAccount(main){
+  if(!requireLogin('Please log in or sign up to view your account.')) return;
+  const u = CURRENT_USER;
+  main.innerHTML = `
+    <div class="card">
+      <h2>My Account</h2>
+      <p><strong>${escapeHTML(u.name)}</strong> &middot; ${escapeHTML(u.phone)} &middot; <span class="badge blue">${roleLabel(u.role)}</span></p>
+      <label>My Service Groups</label>
+      <div class="check-row">
+        ${GROUPS.map(g=>`<label><input type="checkbox" value="${g}" ${u.groups.includes(g)?'checked':''} onchange="toggleMyGroup('${g.replace(/'/g,"\\'")}')"> ${g}</label>`).join('')}
+      </div>
+      <div class="note">Tip: Join the Follow Up Team or KAPS group above if you help with member follow up. This gives you access to the Follow Up tab.</div>
+    </div>
+
+    <div class="card">
+      <h3>Write Your Testimony</h3>
+      <p style="color:var(--grey);font-size:14px">Your testimony will be reviewed by a super admin before it is published for the church to read.</p>
+      <textarea id="testimonyText" placeholder="Share what God has done in your life"></textarea>
+      <button class="btn gold" onclick="submitTestimony()">Submit Testimony</button>
+      <div id="testMsg"></div>
+    </div>
+  `;
+}
+
+async function toggleMyGroup(group){
+  const users = await sGet('users') || [];
+  const u = users.find(x=>x.id===CURRENT_USER.id);
+  if(!u) return;
+  if(u.groups.includes(group)) u.groups = u.groups.filter(g=>g!==group);
+  else u.groups.push(group);
+  await sSet('users', users);
+  CURRENT_USER = u;
+}
+
+async function submitTestimony(){
+  const text = document.getElementById('testimonyText').value.trim();
+  if(!text){ document.getElementById('testMsg').innerHTML = '<div class="msg err">Please write something first.</div>'; return; }
+  const rec = {id: uid(), authorId: CURRENT_USER.id, authorName: CURRENT_USER.name, text, status:'pending', submittedAt: new Date().toISOString()};
+  await sSet('testimony:'+rec.id, rec);
+  const idx = await sGet('testimony_index') || [];
+  idx.push(rec.id);
+  await sSet('testimony_index', idx);
+  document.getElementById('testMsg').innerHTML = '<div class="msg ok">Thank you. Your testimony has been sent for review.</div>';
+  document.getElementById('testimonyText').value='';
+}
+
+/* ---------------- FOLLOW UP ---------------- */
+/* ---------------- CHECK IN HUB (attendance, meetings, follow up, absence) ---------------- */
+let CHECKIN_SUB = 'attendance';
+async function renderCheckin(main){
+  if(!requireLogin('Please log in to check in for service, meetings, follow up members, or leave an absence note.')) return;
+  const canFollowUp = ['super_admin','leader'].includes(CURRENT_USER.role) || CURRENT_USER.groups.some(g=>g.includes('Follow Up') || g.includes('KAPS'));
+  main.innerHTML = `
+    <div class="card">
+      <h2>Check In</h2>
+      <div class="check-row" id="checkinSubTabs">
+        <button class="btn small" data-sub="attendance" onclick="setCheckinSub('attendance')">Sunday Service</button>
+        <button class="btn small outline" data-sub="meetings" onclick="setCheckinSub('meetings')">Group Meetings</button>
+        ${canFollowUp ? `<button class="btn small outline" data-sub="followup" onclick="setCheckinSub('followup')">Follow Up</button>` : ''}
+        <button class="btn small outline" data-sub="absence" onclick="setCheckinSub('absence')">Could Not Attend</button>
+        <button class="btn small outline" data-sub="counselling" onclick="setCheckinSub('counselling')">Book Counselling</button>
+      </div>
+    </div>
+    <div id="checkinSubContent"></div>
+  `;
+  await setCheckinSub('attendance');
+}
+
+async function setCheckinSub(sub){
+  CHECKIN_SUB = sub;
+  document.querySelectorAll('#checkinSubTabs button').forEach(b=>{
+    b.className = 'btn small' + (b.dataset.sub===sub ? '' : ' outline');
+  });
+  const container = document.getElementById('checkinSubContent');
+  const map = {attendance: renderAttendance, meetings: renderMeetings, followup: renderFollowup, absence: renderAbsence, counselling: renderCounselling};
+  await map[sub](container);
+}
+
+function refreshCheckinSub(){
+  const container = document.getElementById('checkinSubContent');
+  if(container){ setCheckinSub(CHECKIN_SUB); }
+  else { showTab(ACTIVE_TAB); }
+}
+
+async function renderCounselling(main){
+  const isPastor = CURRENT_USER.role==='super_admin';
+  const idx = await sGet('counselling_index') || [];
+  let items = (await Promise.all(idx.map(id=>sGet('counselling:'+id)))).filter(Boolean);
+  if(!isPastor) items = items.filter(i=>i.userId===CURRENT_USER.id);
+  items.sort((a,b)=>new Date(b.date)-new Date(a.date));
+  main.innerHTML = `
+    <div class="card">
+      <h3>Book Counselling With The Pastor</h3>
+      <label>Preferred day and time</label>
+      <input type="text" id="counselWhen" placeholder="e.g. Sunday after service">
+      <label>What would you like to talk about?</label>
+      <textarea id="counselNote" placeholder="Optional"></textarea>
+      <button class="btn gold" onclick="bookCounselling()">Request Session</button>
+      <div id="counselMsg"></div>
+    </div>
+    <div class="card">
+      <h3>${isPastor ? 'All Requests' : 'My Requests'}</h3>
+      ${items.map(i=>`
+        <div class="list-item">
+          ${isPastor ? `<strong>${escapeHTML(i.name)}</strong> &middot; ` : ''}${escapeHTML(i.when)}
+          <div class="meta">${new Date(i.date).toLocaleDateString()} &middot; <span class="badge ${i.status==='confirmed'?'green':'grey'}">${i.status}</span></div>
+          ${i.note ? `<p>${escapeHTML(i.note)}</p>` : ''}
+          ${isPastor && i.status!=='confirmed' ? `<button class="btn small" onclick="confirmCounselling('${i.id}')">Mark Confirmed</button>` : ''}
+        </div>
+      `).join('') || '<p style="font-size:14px;color:var(--grey)">None yet.</p>'}
+    </div>
+  `;
+}
+
+async function bookCounselling(){
+  const when = document.getElementById('counselWhen').value.trim();
+  const note = document.getElementById('counselNote').value.trim();
+  if(!when){ document.getElementById('counselMsg').innerHTML = '<div class="msg err">Please add a preferred day and time.</div>'; return; }
+  const rec = {id:uid(), userId:CURRENT_USER.id, name:CURRENT_USER.name, when, note, status:'requested', date:new Date().toISOString()};
+  await sSet('counselling:'+rec.id, rec);
+  const idx = await sGet('counselling_index') || [];
+  idx.push(rec.id);
+  await sSet('counselling_index', idx);
+  refreshCheckinSub();
+}
+
+async function confirmCounselling(id){
+  const rec = await sGet('counselling:'+id);
+  rec.status = 'confirmed';
+  await sSet('counselling:'+id, rec);
+  refreshCheckinSub();
+}
+
+async function renderFollowup(main){
+  if(!requireLogin('Please log in to use the follow up tool.')) return;
+  const allowed = ['super_admin','leader'].includes(CURRENT_USER.role) || CURRENT_USER.groups.some(g=>g.includes('Follow Up') || g.includes('KAPS'));
+  if(!allowed){
+    main.innerHTML = `<div class="card"><h2>Follow Up</h2><p>This section is for members of the Follow Up Team or KAPS group. Join that group from My Account if you serve in follow up.</p></div>`;
+    return;
+  }
+  const ids = await sGet('visitor_index') || [];
+  const visitors = (await Promise.all(ids.map(id=>sGet('visitors:'+id)))).filter(Boolean).sort((a,b)=> new Date(b.submittedAt)-new Date(a.submittedAt));
+
+  let rows = '';
+  for(const v of visitors){
+    const followups = await sGet('followups:'+v.id) || [];
+    rows += `
+      <div class="list-item">
+        <div style="display:flex;justify-content:space-between;flex-wrap:wrap">
+          <strong>${escapeHTML(v.name)}</strong>
+          <span class="badge ${v.intent==='member'?'gold':'blue'}">${v.intent==='member'?'Wants Membership':'Visitor'}</span>
+        </div>
+        <div class="meta">Phone: ${escapeHTML(v.phone)} &middot; Invited by: ${escapeHTML(v.inviter||'Not specified')} &middot; Born again: ${escapeHTML(v.born)}</div>
+        <div class="meta">Loved: ${v.loves.join(', ')||'Not specified'} ${v.address? ' &middot; From: '+escapeHTML(v.address):''}</div>
+        <div class="meta">Visited on ${new Date(v.submittedAt).toLocaleDateString()}</div>
+        <details style="margin-top:8px">
+          <summary style="cursor:pointer;color:var(--royal);font-size:13px">Follow up history (${followups.length})</summary>
+          ${followups.map(f=>`<div style="padding:8px 0;border-top:1px solid var(--line);font-size:13px"><span class="tag-group">${escapeHTML(f.byName)}</span> &middot; ${new Date(f.date).toLocaleDateString()}<br>${escapeHTML(f.notes)}</div>`).join('') || '<p style="font-size:13px;color:var(--grey)">No follow up recorded yet.</p>'}
+        </details>
+        <textarea id="fu-${v.id}" placeholder="Record this call or message..." style="margin-top:8px"></textarea>
+        <button class="btn small" onclick="addFollowup('${v.id}')">Save Follow Up (as ${escapeHTML(CURRENT_USER.name)})</button>
+      </div>
+    `;
+  }
+
+  main.innerHTML = `
+    <div class="card">
+      <h2>Follow Up</h2>
+      <p style="color:var(--grey);font-size:14px">Every entry you save is automatically tagged with your name, so the team knows who has followed up with each person.</p>
+      ${rows || '<p>No visitors recorded yet.</p>'}
+    </div>
+  `;
+}
+
+async function addFollowup(visitorId){
+  const notes = document.getElementById('fu-'+visitorId).value.trim();
+  if(!notes) return;
+  const list = await sGet('followups:'+visitorId) || [];
+  list.push({byId: CURRENT_USER.id, byName: CURRENT_USER.name, notes, date: new Date().toISOString()});
+  await sSet('followups:'+visitorId, list);
+  refreshCheckinSub();
+}
+
+/* ---------------- TESTIMONY (public list + admin approve happens in admin tab) ---------------- */
+async function renderTestimony(main){
+  const ids = await sGet('testimony_index') || [];
+  const items = (await Promise.all(ids.map(id=>sGet('testimony:'+id)))).filter(Boolean);
+  const approved = items.filter(t=>t.status==='approved').sort((a,b)=>new Date(b.submittedAt)-new Date(a.submittedAt));
+  main.innerHTML = `
+    <div class="card">
+      <h2>Testimonies</h2>
+      <p style="color:var(--grey);font-size:14px">Approved testimonies from members of our church family.</p>
+      ${approved.map(t=>`
+        <div class="list-item">
+          <strong>${escapeHTML(t.authorName)}</strong>
+          <div class="meta">${new Date(t.submittedAt).toLocaleDateString()}</div>
+          <p>${escapeHTML(t.text)}</p>
+        </div>
+      `).join('') || '<p>No testimonies published yet. Log in from My Account to share yours.</p>'}
+    </div>
+  `;
+}
+
+/* ---------------- ATTENDANCE (500m geofence) ---------------- */
+function haversineMeters(lat1, lon1, lat2, lon2){
+  const R = 6371000;
+  const toRad = d=> d*Math.PI/180;
+  const dLat = toRad(lat2-lat1);
+  const dLon = toRad(lon2-lon1);
+  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+async function renderAttendance(main){
+  if(!requireLogin('Please log in to sign the attendance register.')) return;
+  const todayKey = new Date().toISOString().slice(0,10);
+  const record = await sGet('attendance:'+todayKey) || [];
+  const already = record.find(r=>r.userId===CURRENT_USER.id);
+  main.innerHTML = `
+    <div class="card">
+      <h2>Sunday Check In</h2>
+      <p style="color:var(--grey);font-size:14px">Check in is only accepted when you are within 500 meters of the chapel. This builds our attendance record for today, ${new Date().toDateString()}.</p>
+      <div id="attMsg"></div>
+      ${already ? `<div class="msg ok">You already checked in today at ${new Date(already.time).toLocaleTimeString()}.</div>` :
+      `<button class="btn gold" onclick="tryCheckin()">Check In Now</button>`}
+      <h3 style="margin-top:24px">Today's Register (${record.length})</h3>
+      <table>
+        <tr><th>Name</th><th>Time</th></tr>
+        ${record.map(r=>`<tr><td>${escapeHTML(r.name)}</td><td>${new Date(r.time).toLocaleTimeString()}</td></tr>`).join('') || '<tr><td colspan=2>No check ins yet today.</td></tr>'}
+      </table>
+    </div>
+  `;
+}
+
+function tryCheckin(){
+  const msg = document.getElementById('attMsg');
+  msg.innerHTML = '<div class="msg ok">Locating you, please allow location access...</div>';
+  if(!navigator.geolocation){
+    msg.innerHTML = '<div class="msg err">Your device does not support location services.</div>';
+    return;
+  }
+  navigator.geolocation.getCurrentPosition(async pos=>{
+    const dist = haversineMeters(pos.coords.latitude, pos.coords.longitude, SETTINGS.churchLat, SETTINGS.churchLng);
+    if(dist <= 500){
+      const todayKey = new Date().toISOString().slice(0,10);
+      const record = await sGet('attendance:'+todayKey) || [];
+      if(!record.find(r=>r.userId===CURRENT_USER.id)){
+        record.push({userId:CURRENT_USER.id, name:CURRENT_USER.name, time:new Date().toISOString(), distance:Math.round(dist)});
+        await sSet('attendance:'+todayKey, record);
+      }
+      refreshCheckinSub();
+    } else {
+      msg.innerHTML = `<div class="msg err">You appear to be about ${Math.round(dist)} meters from the chapel. Please try again once you are within 500 meters.</div>`;
+    }
+  }, err=>{
+    msg.innerHTML = '<div class="msg err">We could not read your location. Please enable location access and try again.</div>';
+  }, {enableHighAccuracy:true, timeout:12000});
+}
+
+/* ---------------- GROUP MEETINGS ---------------- */
+async function renderMeetings(main){
+  if(!requireLogin('Please log in to view group meetings.')) return;
+  const isLeaderOrAdmin = ['super_admin','leader'].includes(CURRENT_USER.role);
+  let controls = '';
+  for(const g of GROUPS){
+    const open = SETTINGS.meetingsOpen[g];
+    const inGroup = CURRENT_USER.groups.includes(g);
+    if(!inGroup && !isLeaderOrAdmin) continue;
+    const todayKey = new Date().toISOString().slice(0,10);
+    const record = await sGet('meeting_attendance:'+g+':'+todayKey) || [];
+    const already = record.find(r=>r.userId===CURRENT_USER.id);
+    controls += `
+      <div class="list-item">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <strong>${g}</strong>
+          <span class="badge ${open?'green':'grey'}">${open?'Meeting Open':'Closed'}</span>
+        </div>
+        ${isLeaderOrAdmin ? `<button class="btn small ${open?'danger':''}" style="margin-top:8px" onclick="toggleMeeting('${g.replace(/'/g,"\\'")}')">${open?'Close Check In':'Open Check In For Today'}</button>` : ''}
+        ${inGroup && open ? (already ? `<div class="msg ok" style="margin-top:8px">You checked in at ${new Date(already.time).toLocaleTimeString()}.</div>` : `<button class="btn gold small" style="margin-top:8px" onclick="checkinMeeting('${g.replace(/'/g,"\\'")}')">Check In</button>`) : ''}
+        ${isLeaderOrAdmin ? `<div class="meta" style="margin-top:8px">Checked in today: ${record.map(r=>escapeHTML(r.name)).join(', ')||'None yet'}</div>` : ''}
+      </div>
+    `;
+  }
+  main.innerHTML = `
+    <div class="card">
+      <h2>Service Group Meetings</h2>
+      <p style="color:var(--grey);font-size:14px">Group leaders open check in when a meeting begins. Members of the group can then check in for that meeting.</p>
+      ${controls || '<p>You are not yet part of a service group. Join one from My Account.</p>'}
+    </div>
+  `;
+}
+
+async function toggleMeeting(group){
+  SETTINGS.meetingsOpen[group] = !SETTINGS.meetingsOpen[group];
+  await sSet('settings', SETTINGS);
+  refreshCheckinSub();
+}
+
+async function checkinMeeting(group){
+  const todayKey = new Date().toISOString().slice(0,10);
+  const key = 'meeting_attendance:'+group+':'+todayKey;
+  const record = await sGet(key) || [];
+  if(!record.find(r=>r.userId===CURRENT_USER.id)){
+    record.push({userId:CURRENT_USER.id, name:CURRENT_USER.name, time:new Date().toISOString()});
+    await sSet(key, record);
+  }
+  refreshCheckinSub();
+}
+
+/* ---------------- ABSENCE NOTE (anonymous, admin can reveal) ---------------- */
+async function renderAbsence(main){
+  if(!requireLogin('Please log in to write an absence note.')) return;
+  main.innerHTml = '';
+  main.innerHTML = `
+    <div class="card">
+      <h2>Could Not Make It To Church?</h2>
+      <p style="color:var(--grey);font-size:14px">If you missed a service, you can let us know why without your name being shown publicly. Only a super admin is able to see who wrote a note, and only when needed for pastoral care.</p>
+      <label>What kept you away?</label>
+      <textarea id="absText" placeholder="Write anonymously, this will not show your name to other members"></textarea>
+      <button class="btn gold" onclick="submitAbsence()">Submit Note</button>
+      <div id="absMsg"></div>
+    </div>
+  `;
+}
+
+async function submitAbsence(){
+  const text = document.getElementById('absText').value.trim();
+  if(!text) return;
+  const rec = {id:uid(), text, authorId: CURRENT_USER.id, authorName: CURRENT_USER.name, date: new Date().toISOString()};
+  await sSet('absence:'+rec.id, rec);
+  const idx = await sGet('absence_index') || [];
+  idx.push(rec.id);
+  await sSet('absence_index', idx);
+  document.getElementById('absMsg').innerHTML = '<div class="msg ok">Thank you, your note has been received.</div>';
+  document.getElementById('absText').value = '';
+}
+
+/* ---------------- ABOUT ---------------- */
+async function renderAbout(main){
+  main.innerHTML = `
+    <div class="card">
+      <h2>About Winners Chapel International</h2>
+      <p>Winners Chapel International, also known as Living Faith Church Worldwide, is a global ministry headquartered in Canaanland, Ota, Nigeria, under the leadership of Bishop David Oyedepo. The ministry was founded on May 2, 1981, and has since grown into a network of churches present in many nations, teaching the Word of Faith and raising people to walk in their full God given potential.</p>
+      <p>Winners Chapel International Ruiru is a local expression of this same vision here in Ruiru, Kiambu County. We are a warm, Bible believing family committed to seeing every visitor become a strong, thriving member of the body of Christ.</p>
+    </div>
+
+    <div class="card">
+      <h2>Service Times</h2>
+      <div class="schedule-item"><span class="day">Sunday, Workers Prayer</span><span class="time">8:00 am to 8:45 am</span></div>
+      <div class="schedule-item"><span class="day">Sunday Main Service</span><span class="time">9:00 am to 11:30 am</span></div>
+      <div class="schedule-item"><span class="day">Monday to Friday, Covenant Hour of Prayer</span><span class="time">6:30 am to 7:30 am</span></div>
+      <div class="schedule-item"><span class="day">Tuesday, Kingdom Advancement Prayers</span><span class="time">5:00 pm to 6:00 pm</span></div>
+      <div class="schedule-item"><span class="day">Wednesday, Midweek Service</span><span class="time">5:00 pm to 6:30 pm</span></div>
+      <div class="schedule-item"><span class="day">Saturday, Covenant Hour of Prayer</span><span class="time">8:00 am to 9:00 am</span></div>
+      <div class="note">First week of every month, Wednesday to Friday, we hold our Week of Spiritual Emphasis, a season of fasting and prayer. These dates are subject to change as announced from the pulpit.</div>
+    </div>
+
+    <div class="card">
+      <h2>Word of Faith Bible Institute, WOFBI</h2>
+      <p>WOFBI is the leadership and ministry training arm of Living Faith Church Worldwide. It began on September 1, 1986 in Kaduna, Nigeria, in fulfilment of a mandate given to Bishop David Oyedepo to raise the foundation of many other ministries. Since then, hundreds of thousands of students have graduated from WOFBI campuses across the world.</p>
+      <p>The institute offers three certificate programs: the Basic Certificate Course, the Leadership Certificate Course, and the Leadership Diploma Course. Graduates come from every walk of life, including ministers, entrepreneurs, professionals, and career men and women. Speak to church leadership if you would like to register for an upcoming WOFBI intake.</p>
+    </div>
+  `;
+}
+
+/* ---------------- ADMIN ---------------- */
+async function renderAdmin(main){
+  if(!requireLogin()) return;
+  if(!['super_admin','leader'].includes(CURRENT_USER.role)){
+    main.innerHTML = `<div class="card"><h2>Admin</h2><p>This area is for church leadership only.</p></div>`;
+    return;
+  }
+  const isSuper = CURRENT_USER.role==='super_admin';
+
+  let settingsBlock = '';
+  if(isSuper){
+    settingsBlock = `
+      <div class="card">
+        <h3>Church Settings</h3>
+        <label>Believers Foundation Class Teacher Name</label>
+        <input type="text" id="setTeacherName" value="${escapeHTML(SETTINGS.teacherName)}">
+        <label>Believers Foundation Class Teacher Phone</label>
+        <input type="text" id="setTeacherPhone" value="${escapeHTML(SETTINGS.teacherPhone)}">
+        <label>Chapel Latitude</label>
+        <input type="number" step="0.0001" id="setLat" value="${SETTINGS.churchLat}">
+        <label>Chapel Longitude</label>
+        <input type="number" step="0.0001" id="setLng" value="${SETTINGS.churchLng}">
+        <button class="btn" onclick="saveSettings()">Save Settings</button>
+        <div id="setMsg"></div>
+      </div>
+    `;
+  }
+
+  // pending testimonies
+  const tIds = await sGet('testimony_index') || [];
+  const testimonies = (await Promise.all(tIds.map(id=>sGet('testimony:'+id)))).filter(Boolean);
+  const pending = testimonies.filter(t=>t.status==='pending');
+
+  let testimonyBlock = `
+    <div class="card">
+      <h3>Testimonies Awaiting Approval (${pending.length})</h3>
+      ${pending.map(t=>`
+        <div class="list-item">
+          <strong>${escapeHTML(t.authorName)}</strong>
+          <p>${escapeHTML(t.text)}</p>
+          <button class="btn small gold" onclick="approveTestimony('${t.id}')">Approve</button>
+          <button class="btn small danger" onclick="rejectTestimony('${t.id}')">Reject</button>
+        </div>
+      `).join('') || '<p style="font-size:14px;color:var(--grey)">No testimonies waiting.</p>'}
+    </div>
+  `;
+
+  // absence notes, only super admin sees author
+  let absenceBlock = '';
+  const aIds = await sGet('absence_index') || [];
+  const absences = (await Promise.all(aIds.map(id=>sGet('absence:'+id)))).filter(Boolean).sort((a,b)=>new Date(b.date)-new Date(a.date));
+  absenceBlock = `
+    <div class="card">
+      <h3>Absence Notes</h3>
+      ${absences.map(a=>`
+        <div class="list-item">
+          <p>${escapeHTML(a.text)}</p>
+          <div class="meta">${new Date(a.date).toLocaleDateString()} ${isSuper ? '&middot; Written by: '+escapeHTML(a.authorName) : '&middot; Author hidden, visible to super admin only'}</div>
+        </div>
+      `).join('') || '<p style="font-size:14px;color:var(--grey)">No absence notes yet.</p>'}
+    </div>
+  `;
+
+  // prayer requests, confidential
+  let prayerBlock = '';
+  if(isSuper || CURRENT_USER.groups.includes("KAPS (Kingdom Advancement Prayer Squad)")){
+    const vIds = await sGet('visitor_index') || [];
+    const visitors = (await Promise.all(vIds.map(id=>sGet('visitors:'+id)))).filter(Boolean).filter(v=>v.prayer);
+    prayerBlock = `
+      <div class="card">
+        <h3>Confidential Prayer Requests</h3>
+        <p style="color:var(--grey);font-size:13px">Visible only to the pastor and KAPS leadership.</p>
+        ${visitors.map(v=>`
+          <div class="list-item">
+            <strong>${escapeHTML(v.name)}</strong> <span class="meta">${escapeHTML(v.phone)}</span>
+            <p>${escapeHTML(v.prayer)}</p>
+          </div>
+        `).join('') || '<p style="font-size:14px;color:var(--grey)">No prayer requests submitted yet.</p>'}
+      </div>
+    `;
+  }
+
+  // user role management
+  let userBlock = '';
+  if(isSuper){
+    const users = await sGet('users') || [];
+    userBlock = `
+      <div class="card">
+        <h3>Manage Members</h3>
+        <table>
+          <tr><th>Name</th><th>Phone</th><th>Role</th><th>Groups</th><th></th></tr>
+          ${users.map(u=>`
+            <tr>
+              <td>${escapeHTML(u.name)}</td>
+              <td>${escapeHTML(u.phone)}</td>
+              <td>${roleLabel(u.role)}</td>
+              <td style="font-size:12px">${u.groups.join(', ')||'-'}</td>
+              <td>
+                <select onchange="changeRole('${u.id}', this.value)">
+                  <option value="member" ${u.role==='member'?'selected':''}>Member</option>
+                  <option value="leader" ${u.role==='leader'?'selected':''}>Leader</option>
+                  <option value="super_admin" ${u.role==='super_admin'?'selected':''}>Super Admin</option>
+                </select>
+              </td>
+            </tr>
+          `).join('')}
+        </table>
+      </div>
+    `;
+  }
+
+  main.innerHTML = `<h2>Admin Dashboard</h2>` + settingsBlock + testimonyBlock + prayerBlock + absenceBlock + userBlock;
+}
+
+async function saveSettings(){
+  SETTINGS.teacherName = document.getElementById('setTeacherName').value.trim();
+  SETTINGS.teacherPhone = document.getElementById('setTeacherPhone').value.trim();
+  SETTINGS.churchLat = parseFloat(document.getElementById('setLat').value);
+  SETTINGS.churchLng = parseFloat(document.getElementById('setLng').value);
+  await sSet('settings', SETTINGS);
+  document.getElementById('setMsg').innerHTML = '<div class="msg ok">Settings saved.</div>';
+}
+
+async function approveTestimony(id){
+  const t = await sGet('testimony:'+id);
+  t.status = 'approved';
+  await sSet('testimony:'+id, t);
+  renderAdmin(document.getElementById('main'));
+}
+async function rejectTestimony(id){
+  const t = await sGet('testimony:'+id);
+  t.status = 'rejected';
+  await sSet('testimony:'+id, t);
+  renderAdmin(document.getElementById('main'));
+}
+async function changeRole(userId, role){
+  const users = await sGet('users') || [];
+  const u = users.find(x=>x.id===userId);
+  if(u){ u.role = role; await sSet('users', users); }
+  if(CURRENT_USER && CURRENT_USER.id===userId) CURRENT_USER.role = role;
+  renderNav();
+}
+
+/* ---------------- UTIL ---------------- */
+function escapeHTML(str){
+  if(str===undefined || str===null) return '';
+  return String(str).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+init();
+</script>
+</body>
+</html>
