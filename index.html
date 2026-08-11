@@ -490,6 +490,15 @@ async function dbGetAttendance(dateKey){
   const rows = await localAll('attendance');
   return rows.filter(r=>r.dateKey===dateKey);
 }
+async function dbGetAttendanceForDates(dateKeys){
+  if(supabaseClient){
+    const { data, error } = await supabaseClient.from('attendance').select('*').in('service_date',dateKeys);
+    if(error || !data) return [];
+    return data.map(r=>({userId:r.user_id, name:r.name, time:r.checked_in_at, distance:r.distance_meters, manual:!!r.manual, checkedInBy:r.checked_in_by||null, dateKey:r.service_date}));
+  }
+  const rows = await localAll('attendance');
+  return rows.filter(r=>dateKeys.includes(r.dateKey));
+}
 async function dbAddAttendance(dateKey, entry){
   if(supabaseClient){
     // Note: manual and checked_in_by are optional columns used for "check in someone
@@ -1299,6 +1308,29 @@ async function submitNewPerson(){
   }
 }
 
+/* ---------- ATTENDANCE ANALYTICS (missed Sundays follow up) ---------- */
+function getLastSundayKeys(n){
+  // Returns the dateKeys (YYYY-MM-DD) of the last n Sundays that have already
+  // happened, most recent first. If today is Sunday it is included.
+  const keys = [];
+  const d = new Date();
+  d.setHours(0,0,0,0);
+  const back = d.getDay(); // 0 = Sunday
+  d.setDate(d.getDate() - back);
+  for(let i=0;i<n;i++){
+    keys.push(d.toISOString().slice(0,10));
+    d.setDate(d.getDate() - 7);
+  }
+  return keys;
+}
+async function getMissedTwoSundaysMembers(){
+  const sundayKeys = getLastSundayKeys(2);
+  if(sundayKeys.length < 2) return [];
+  const [users, records] = await Promise.all([dbGetUsers(), dbGetAttendanceForDates(sundayKeys)]);
+  const attendedIds = new Set(records.filter(r=>!r.manual).map(r=>r.userId));
+  return users.filter(u=>!attendedIds.has(u.id));
+}
+
 /* ---------------- MEMBERSHIP PATH ---------------- */
 async function renderMembership(main){
   main.innerHTML = `
@@ -1346,7 +1378,7 @@ async function renderAccount(main){
       </select>
       <button class="btn" style="margin-top:10px;" onclick="saveMyGroups()">Save Groups</button>
       <div id="groupsMsg"></div>
-      <div class="note">Tip: Join the Follow Up Team or KAPS group above if you help with member follow up. This gives you access to the Follow Up tab. Being an admin/leader of a group is assigned separately by church leadership, and is limited to one group.</div>
+      <div class="note">Tip: Join the Follow Up Team or KAPS group above if you help with member follow up. This gives you access to the Follow Up tab.</div>
     </div>
 
     <div class="card">
@@ -1553,11 +1585,13 @@ async function renderAttendance(main){
       <div id="attMsg" style="margin-top:12px"></div>
       ${already ? `<div class="msg ok">You already checked in today at ${new Date(already.time).toLocaleTimeString()}.</div>` :
       (open ? `<button class="btn gold" onclick="tryCheckin()">Check In Now</button>` : `<p style="color:var(--grey);font-size:13px">Check in has not been opened yet today. Please check back once service begins.</p>`)}
+      ${isLeaderOrAdmin ? `
       <h3 style="margin-top:24px">Today's Register (${record.length})</h3>
       <table>
         <tr><th>Name</th><th>Time</th></tr>
         ${record.map(r=>`<tr><td>${escapeHTML(r.name)}${r.manual?' <span class="badge grey" style="margin-left:4px">Manual</span>':''}</td><td>${new Date(r.time).toLocaleTimeString()}</td></tr>`).join('') || '<tr><td colspan=2>No check ins yet today.</td></tr>'}
       </table>
+      ` : ''}
       ${isLeaderOrAdmin ? `
         <h3 style="margin-top:24px">Check In Someone Without A Smartphone</h3>
         <p style="color:var(--grey);font-size:13px">For members or visitors who cannot check in themselves. This records them straight into today's register.</p>
@@ -1884,6 +1918,25 @@ async function renderAdmin(main){
     `;
   }
 
+  // attendance analytics: flag members who missed the last 2 Sundays in a row
+  const missedMembers = await getMissedTwoSundaysMembers();
+  const followUpBlock = `
+    <div class="card">
+      <h3>Follow Up Radar &mdash; Missed 2 Sundays In A Row (${missedMembers.length})</h3>
+      <p style="color:var(--grey);font-size:13px">Members who did not check in to either of the last two Sunday services. Consider reaching out to them.</p>
+      <table>
+        <tr><th>Name</th><th>Phone</th><th>Groups</th></tr>
+        ${missedMembers.map(u=>`
+          <tr>
+            <td>${escapeHTML(u.name)}</td>
+            <td>${escapeHTML(u.phone)}</td>
+            <td>${u.groups && u.groups.length ? escapeHTML(u.groups.join(', ')) : '&mdash;'}</td>
+          </tr>
+        `).join('') || '<tr><td colspan=3>No one has missed the last two Sundays. Well done!</td></tr>'}
+      </table>
+    </div>
+  `;
+
   // activity log, visible to super admin only, shows everything that happened on the site
   let activityBlock = '';
   if(isSuper){
@@ -1907,7 +1960,7 @@ async function renderAdmin(main){
     `;
   }
 
-  main.innerHTML = `<h2>Admin Dashboard</h2>` + settingsBlock + testimonyBlock + prayerBlock + absenceBlock + userBlock + activityBlock;
+  main.innerHTML = `<h2>Admin Dashboard</h2>` + settingsBlock + testimonyBlock + prayerBlock + absenceBlock + followUpBlock + userBlock + activityBlock;
 }
 
 function useMyLocationForCenter(){
