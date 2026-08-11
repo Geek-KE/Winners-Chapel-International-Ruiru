@@ -40,6 +40,16 @@
     z-index:0;
   }
   .app{position:relative;z-index:1;}
+
+  /* PRELOADER */
+  #preloader{position:fixed;inset:0;background:var(--white);z-index:9999;display:flex;align-items:center;justify-content:center;transition:opacity .4s ease,visibility .4s ease;}
+  #preloader img{width:min(38vw,150px);animation:preloaderPulse 1.15s ease-in-out infinite;}
+  @keyframes preloaderPulse{
+    0%{transform:scale(0.88);opacity:0.55;}
+    50%{transform:scale(1.06);opacity:1;}
+    100%{transform:scale(0.88);opacity:0.55;}
+  }
+  #preloader.loaded{opacity:0;visibility:hidden;pointer-events:none;}
   h1,h2,h3,h4{font-family:'Playfair Display',serif;letter-spacing:0.01em;margin:0 0 8px 0;color:var(--royal-deep);}
   p{line-height:1.6;}
   button{font-family:inherit;cursor:pointer;}
@@ -190,6 +200,7 @@
 </style>
 </head>
 <body>
+<div id="preloader"><img src="Logo.png" alt="Loading..." onerror="this.style.display='none'"></div>
 <div class="app">
 
   <header class="site">
@@ -1715,6 +1726,17 @@ function escapeHTML(str){
 }
 
 init();
+</script>
+<script>
+  window.addEventListener('load', function(){
+    var pre = document.getElementById('preloader');
+    if(pre){
+      setTimeout(function(){
+        pre.classList.add('loaded');
+        setTimeout(function(){ pre.remove(); }, 450);
+      }, 250);
+    }
+  });
 </script>
 </body>
 </html>
