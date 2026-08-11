@@ -331,6 +331,15 @@ async function dbSaveUser(u){
   }
   await localUpsert('users', u);
 }
+async function dbDeleteUser(userId){
+  if(supabaseClient){
+    const { error } = await supabaseClient.from('users').delete().eq('id',userId);
+    if(error) console.error('delete user failed', error);
+    return;
+  }
+  const rows = await localAll('users');
+  await localSet('users', rows.filter(r=>r.id!==userId));
+}
 
 /* ---------- VISITORS ---------- */
 function rowToVisitor(r){
@@ -476,14 +485,17 @@ async function dbGetAttendance(dateKey){
   if(supabaseClient){
     const { data, error } = await supabaseClient.from('attendance').select('*').eq('service_date',dateKey);
     if(error || !data) return [];
-    return data.map(r=>({userId:r.user_id, name:r.name, time:r.checked_in_at, distance:r.distance_meters}));
+    return data.map(r=>({userId:r.user_id, name:r.name, time:r.checked_in_at, distance:r.distance_meters, manual:!!r.manual, checkedInBy:r.checked_in_by||null}));
   }
   const rows = await localAll('attendance');
   return rows.filter(r=>r.dateKey===dateKey);
 }
 async function dbAddAttendance(dateKey, entry){
   if(supabaseClient){
-    const { error } = await supabaseClient.from('attendance').insert({ service_date:dateKey, user_id:entry.userId, name:entry.name, distance_meters:entry.distance });
+    // Note: manual and checked_in_by are optional columns used for "check in someone
+    // without a smartphone" entries made by an Admin/Super Admin; add them to the
+    // attendance table (manual boolean, checked_in_by text) if not already present.
+    const { error } = await supabaseClient.from('attendance').insert({ service_date:dateKey, user_id:entry.userId, name:entry.name, distance_meters:entry.distance, manual:!!entry.manual, checked_in_by:entry.checkedInBy||null });
     if(error) console.error('save attendance failed', error);
     return;
   }
@@ -495,14 +507,17 @@ async function dbGetMeetingAttendance(group, dateKey){
   if(supabaseClient){
     const { data, error } = await supabaseClient.from('meeting_attendance').select('*').eq('group_name',group).eq('meeting_date',dateKey);
     if(error || !data) return [];
-    return data.map(r=>({userId:r.user_id, name:r.name, time:r.checked_in_at}));
+    return data.map(r=>({userId:r.user_id, name:r.name, time:r.checked_in_at, manual:!!r.manual, checkedInBy:r.checked_in_by||null}));
   }
   const rows = await localAll('meeting_attendance');
   return rows.filter(r=>r.group===group && r.dateKey===dateKey);
 }
 async function dbAddMeetingAttendance(group, dateKey, entry){
   if(supabaseClient){
-    const { error } = await supabaseClient.from('meeting_attendance').insert({ group_name:group, meeting_date:dateKey, user_id:entry.userId, name:entry.name });
+    // manual and checked_in_by are optional columns for "check in someone without a
+    // smartphone" entries made by that group's admin/leader; add these columns
+    // (manual boolean, checked_in_by text) to meeting_attendance if not already present.
+    const { error } = await supabaseClient.from('meeting_attendance').insert({ group_name:group, meeting_date:dateKey, user_id:entry.userId, name:entry.name, manual:!!entry.manual, checked_in_by:entry.checkedInBy||null });
     if(error) console.error('save meeting attendance failed', error);
     return;
   }
@@ -527,6 +542,30 @@ async function dbAddAbsence(a){
     return;
   }
   await localInsert('absences', a);
+}
+
+/* ---------- ACTIVITY LOG (Super Admin only) ----------
+   Records every notable action taken on the site (logins, sign ups, check ins,
+   role changes, deletions, testimony/absence/counselling actions, settings
+   changes, etc.) so a Super Admin can review everything that happened. */
+function rowToActivity(r){ return { id:r.id, action:r.action, actorId:r.actor_id, actorName:r.actor_name, details:r.details||'', date:r.created_at }; }
+async function dbGetActivityLog(){
+  if(supabaseClient){
+    const { data, error } = await supabaseClient.from('activity_log').select('*').order('created_at',{ascending:false}).limit(500);
+    if(error || !data) return [];
+    return data.map(rowToActivity);
+  }
+  const rows = await localAll('activity_log');
+  return rows.slice().sort((a,b)=>new Date(b.date)-new Date(a.date));
+}
+async function logActivity(action, details){
+  const entry = { id:uid(), action, actorId: CURRENT_USER ? CURRENT_USER.id : null, actorName: CURRENT_USER ? CURRENT_USER.name : 'Guest', details: details||'', date:new Date().toISOString() };
+  if(supabaseClient){
+    const { error } = await supabaseClient.from('activity_log').insert({ id:entry.id, action:entry.action, actor_id:entry.actorId, actor_name:entry.actorName, details:entry.details });
+    if(error) console.error('save activity log failed', error);
+    return;
+  }
+  await localInsert('activity_log', entry);
 }
 
 /* ---------------- VALIDATION HELPERS ---------------- */
@@ -822,6 +861,7 @@ async function doLogin(){
   }
   CURRENT_USER = u;
   persistSession();
+  logActivity('login', 'Logged in');
   closeModal();
   renderUserbar();
   renderNav();
@@ -1007,6 +1047,7 @@ async function doSignup(){
   await dbSaveUser(newUser);
   CURRENT_USER = newUser;
   persistSession();
+  logActivity('signup', `New account created${role==='super_admin' ? ' (assigned Super Admin)' : ''}`);
   closeModal();
   renderUserbar();
   renderNav();
@@ -1014,6 +1055,7 @@ async function doSignup(){
 }
 
 function logout(){
+  logActivity('logout', 'Logged out');
   CURRENT_USER = null;
   persistSession();
   renderUserbar();
@@ -1497,6 +1539,7 @@ function haversineMeters(lat1, lon1, lat2, lon2){
 async function renderAttendance(main){
   if(!requireLogin('Please log in to sign the attendance register.')) return;
   const isSuper = CURRENT_USER.role==='super_admin';
+  const isLeaderOrAdmin = ['super_admin','leader'].includes(CURRENT_USER.role);
   const todayKey = new Date().toISOString().slice(0,10);
   const record = await dbGetAttendance(todayKey);
   const already = record.find(r=>r.userId===CURRENT_USER.id);
@@ -1513,16 +1556,42 @@ async function renderAttendance(main){
       <h3 style="margin-top:24px">Today's Register (${record.length})</h3>
       <table>
         <tr><th>Name</th><th>Time</th></tr>
-        ${record.map(r=>`<tr><td>${escapeHTML(r.name)}</td><td>${new Date(r.time).toLocaleTimeString()}</td></tr>`).join('') || '<tr><td colspan=2>No check ins yet today.</td></tr>'}
+        ${record.map(r=>`<tr><td>${escapeHTML(r.name)}${r.manual?' <span class="badge grey" style="margin-left:4px">Manual</span>':''}</td><td>${new Date(r.time).toLocaleTimeString()}</td></tr>`).join('') || '<tr><td colspan=2>No check ins yet today.</td></tr>'}
       </table>
+      ${isLeaderOrAdmin ? `
+        <h3 style="margin-top:24px">Check In Someone Without A Smartphone</h3>
+        <p style="color:var(--grey);font-size:13px">For members or visitors who cannot check in themselves. This records them straight into today's register.</p>
+        <label>Full Name</label>
+        <input type="text" id="manualAttName" placeholder="e.g. John Mwangi">
+        <button class="btn small gold" style="margin-top:10px" onclick="manualCheckin()">Check In</button>
+        <div id="manualAttMsg" style="margin-top:8px"></div>
+      ` : ''}
     </div>
   `;
+}
+
+async function manualCheckin(){
+  if(!CURRENT_USER || !['super_admin','leader'].includes(CURRENT_USER.role)) return;
+  const nameEl = document.getElementById('manualAttName');
+  const name = nameEl.value.trim();
+  const msg = document.getElementById('manualAttMsg');
+  if(!name){
+    msg.innerHTML = '<div class="msg err">Please enter a name.</div>';
+    return;
+  }
+  const todayKey = new Date().toISOString().slice(0,10);
+  await dbAddAttendance(todayKey, {userId:'manual-'+uid(), name, distance:null, manual:true, checkedInBy:CURRENT_USER.name});
+  await logActivity('manual_checkin', `Checked in "${name}" for Sunday service (no smartphone)`);
+  msg.innerHTML = `<div class="msg ok">${escapeHTML(name)} checked in.</div>`;
+  nameEl.value = '';
+  refreshCheckinSub();
 }
 
 async function toggleGeneralCheckin(){
   if(!CURRENT_USER || CURRENT_USER.role!=='super_admin') return; // only super admins control the general check in
   SETTINGS.generalCheckinOpen = !SETTINGS.generalCheckinOpen;
   await dbSaveSettings(SETTINGS);
+  await logActivity('toggle_general_checkin', SETTINGS.generalCheckinOpen ? 'Opened general Sunday check in' : 'Closed general Sunday check in');
   refreshCheckinSub();
 }
 
@@ -1544,6 +1613,7 @@ function tryCheckin(){
       const record = await dbGetAttendance(todayKey);
       if(!record.find(r=>r.userId===CURRENT_USER.id)){
         await dbAddAttendance(todayKey, {userId:CURRENT_USER.id, name:CURRENT_USER.name, distance:Math.round(dist)});
+        await logActivity('checkin', 'Checked in for Sunday service');
       }
       refreshCheckinSub();
     } else {
@@ -1577,7 +1647,17 @@ async function renderMeetings(main){
         </div>
         ${canToggle ? `<button class="btn small ${open?'danger':''}" style="margin-top:8px" onclick="toggleMeeting('${g.replace(/'/g,"\\'")}')">${open?'Close Check In':'Open Check In For Today'}</button>` : ''}
         ${inGroup && open ? (already ? `<div class="msg ok" style="margin-top:8px">You checked in at ${new Date(already.time).toLocaleTimeString()}.</div>` : `<button class="btn gold small" style="margin-top:8px" onclick="checkinMeeting('${g.replace(/'/g,"\\'")}')">Check In</button>`) : ''}
-        ${isLeaderOrAdmin ? `<div class="meta" style="margin-top:8px">Checked in today: ${record.map(r=>escapeHTML(r.name)).join(', ')||'None yet'}</div>` : ''}
+        ${isLeaderOrAdmin ? `<div class="meta" style="margin-top:8px">Checked in today: ${record.map(r=>escapeHTML(r.name)+(r.manual?' (manual)':'')).join(', ')||'None yet'}</div>` : ''}
+        ${canToggle ? `
+          <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line)">
+            <label style="margin-top:0">Check In Someone Without A Smartphone</label>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <input type="text" id="manualMeetName-${g.replace(/[^a-zA-Z0-9]/g,'')}" placeholder="Full name" style="flex:1;min-width:160px">
+              <button class="btn small gold" style="margin-top:0" onclick="manualCheckinMeeting('${g.replace(/'/g,"\\'")}')">Check In</button>
+            </div>
+            <div id="manualMeetMsg-${g.replace(/[^a-zA-Z0-9]/g,'')}" style="margin-top:6px"></div>
+          </div>
+        ` : ''}
       </div>
     `;
   }
@@ -1595,6 +1675,7 @@ async function toggleMeeting(group){
   if(!isSuper && !isGroupAdmin) return; // only that group's admin or a super admin may toggle
   SETTINGS.meetingsOpen[group] = !SETTINGS.meetingsOpen[group];
   await dbSaveSettings(SETTINGS);
+  await logActivity('toggle_meeting', `${SETTINGS.meetingsOpen[group] ? 'Opened' : 'Closed'} check in for "${group}"`);
   refreshCheckinSub();
 }
 
@@ -1603,7 +1684,27 @@ async function checkinMeeting(group){
   const record = await dbGetMeetingAttendance(group, todayKey);
   if(!record.find(r=>r.userId===CURRENT_USER.id)){
     await dbAddMeetingAttendance(group, todayKey, {userId:CURRENT_USER.id, name:CURRENT_USER.name});
+    await logActivity('checkin_meeting', `Checked in for "${group}"`);
   }
+  refreshCheckinSub();
+}
+
+async function manualCheckinMeeting(group){
+  const isSuper = CURRENT_USER && CURRENT_USER.role==='super_admin';
+  const isGroupAdmin = CURRENT_USER && CURRENT_USER.role==='leader' && CURRENT_USER.adminGroup===group;
+  if(!isSuper && !isGroupAdmin) return; // only that group's admin or a super admin may check someone in manually
+  const safeId = group.replace(/[^a-zA-Z0-9]/g,'');
+  const nameEl = document.getElementById('manualMeetName-'+safeId);
+  const msg = document.getElementById('manualMeetMsg-'+safeId);
+  const name = nameEl.value.trim();
+  if(!name){
+    if(msg) msg.innerHTML = '<div class="msg err" style="padding:6px 10px;font-size:12px;">Please enter a name.</div>';
+    return;
+  }
+  const todayKey = new Date().toISOString().slice(0,10);
+  await dbAddMeetingAttendance(group, todayKey, {userId:'manual-'+uid(), name, manual:true, checkedInBy:CURRENT_USER.name});
+  await logActivity('manual_checkin_meeting', `Checked in "${name}" for "${group}" (no smartphone)`);
+  nameEl.value = '';
   refreshCheckinSub();
 }
 
@@ -1773,6 +1874,7 @@ async function renderAdmin(main){
               </td>
               <td>
                 <button class="btn small gold" onclick="saveMemberRole('${u.id}')">Save</button>
+                ${u.id!==CURRENT_USER.id ? `<button class="btn small danger" style="margin-left:4px" onclick="deleteMember('${u.id}','${escapeHTML(u.name).replace(/'/g,"\\'")}')">Delete</button>` : ''}
                 <div id="roleMsg-${u.id}" style="margin-top:4px;"></div>
               </td>
             </tr>
@@ -1782,7 +1884,30 @@ async function renderAdmin(main){
     `;
   }
 
-  main.innerHTML = `<h2>Admin Dashboard</h2>` + settingsBlock + testimonyBlock + prayerBlock + absenceBlock + userBlock;
+  // activity log, visible to super admin only, shows everything that happened on the site
+  let activityBlock = '';
+  if(isSuper){
+    const log = await dbGetActivityLog();
+    activityBlock = `
+      <div class="card">
+        <h3>Activity Log</h3>
+        <p style="color:var(--grey);font-size:13px">A record of everything that has happened on the site — logins, sign ups, check ins, role changes, deletions, and more. Visible only to Super Admins.</p>
+        <table>
+          <tr><th>When</th><th>Who</th><th>Action</th><th>Details</th></tr>
+          ${log.map(a=>`
+            <tr>
+              <td>${new Date(a.date).toLocaleString()}</td>
+              <td>${escapeHTML(a.actorName)}</td>
+              <td>${escapeHTML(a.action)}</td>
+              <td>${escapeHTML(a.details)}</td>
+            </tr>
+          `).join('') || '<tr><td colspan=4>No activity recorded yet.</td></tr>'}
+        </table>
+      </div>
+    `;
+  }
+
+  main.innerHTML = `<h2>Admin Dashboard</h2>` + settingsBlock + testimonyBlock + prayerBlock + absenceBlock + userBlock + activityBlock;
 }
 
 function useMyLocationForCenter(){
@@ -1807,15 +1932,18 @@ async function saveSettings(){
   SETTINGS.churchLat = parseFloat(document.getElementById('setLat').value);
   SETTINGS.churchLng = parseFloat(document.getElementById('setLng').value);
   await dbSaveSettings(SETTINGS);
+  await logActivity('save_settings', 'Updated church settings');
   document.getElementById('setMsg').innerHTML = '<div class="msg ok">Settings saved.</div>';
 }
 
 async function approveTestimony(id){
   await dbSetTestimonyStatus(id, 'approved');
+  await logActivity('approve_testimony', `Approved testimony ${id}`);
   renderAdmin(document.getElementById('main'));
 }
 async function rejectTestimony(id){
   await dbSetTestimonyStatus(id, 'rejected');
+  await logActivity('reject_testimony', `Rejected testimony ${id}`);
   renderAdmin(document.getElementById('main'));
 }
 function onRoleSelectChange(userId){
@@ -1852,8 +1980,18 @@ async function saveMemberRole(userId){
     CURRENT_USER.adminGroup = role==='leader' ? group : null;
   }
   if(msgEl) msgEl.innerHTML = '<div class="msg ok" style="padding:6px 10px;font-size:12px;">Saved.</div>';
+  await logActivity('change_role', `Set role of "${u ? u.name : userId}" to ${role}${group ? ' ('+group+')' : ''}`);
   renderNav();
   renderUserbar();
+}
+
+async function deleteMember(userId, name){
+  if(!CURRENT_USER || CURRENT_USER.role!=='super_admin') return; // only super admins may delete a user record
+  if(userId===CURRENT_USER.id) return; // safety: cannot delete your own account this way
+  if(!confirm(`Delete ${name}'s account permanently? This cannot be undone.`)) return;
+  await dbDeleteUser(userId);
+  await logActivity('delete_user', `Deleted user "${name}" (${userId})`);
+  renderAdmin(document.getElementById('main'));
 }
 
 /* ---------------- UTIL ---------------- */
