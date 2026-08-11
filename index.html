@@ -77,10 +77,19 @@
   @keyframes fade{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:none;}}
 
   .card{background:var(--white);border:1px solid var(--line);border-radius:10px;padding:20px;margin-bottom:18px;}
-  .hero{background:var(--royal);color:var(--white);border-radius:14px;padding:36px 28px;margin-bottom:24px;position:relative;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,0.2);}
-  .hero h2{color:var(--white);font-size:28px;position:relative;}
-  .hero p{color:rgba(255,255,255,0.9);max-width:560px;position:relative;}
-  .hero .verse{color:var(--gold-light);font-weight:bold;margin-top:14px;font-size:14px;position:relative;}
+  .hero{
+    background:
+      linear-gradient(rgba(255,255,255,0.93), rgba(255,255,255,0.93)),
+      url('Logo.png') center/260px no-repeat;
+    color:var(--ink);
+    border:1px solid var(--line);
+    border-radius:14px;padding:36px 28px;margin-bottom:24px;position:relative;overflow:hidden;
+    text-align:center;
+  }
+  .hero h2{color:var(--royal-deep);font-size:28px;position:relative;}
+  .hero p{color:var(--ink);max-width:560px;position:relative;margin:0 auto;}
+  .hero .verse{color:#8C6A0A;font-weight:bold;margin-top:14px;font-size:14px;position:relative;}
+  .hero .btn.outline{color:var(--royal);border-color:var(--royal);}
 
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px;}
   .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;}
@@ -225,7 +234,7 @@ const TABS = [
   {id:'testimony', label:'Testimonies'},
   {id:'about', label:'About Us'},
   {id:'account', label:'My Account'},
-  {id:'membership', label:'Membership Path', memberOnly:true},
+  {id:'membership', label:'Covenant Path', memberOnly:true},
   {id:'checkin', label:'Check In', memberOnly:true},
   {id:'admin', label:'Admin', adminOnly:true}
 ];
@@ -388,7 +397,7 @@ function openSignup(){
   openModalHTML(`
     <button class="close-x" onclick="closeModal()">&times;</button>
     <h3>Church Member Sign Up</h3>
-    <p style="font-size:13px;color:var(--grey)">Create your account so you can check in for service, submit testimonies, and stay connected with your service group.</p>
+    <p style="font-size:13px;color:var(--grey)">Create your account so you can check in for service, submit testimonies, and stay connected with your service groups. You can choose your groups afterwards from your account.</p>
     <div id="signupMsg"></div>
     <label>Full Name</label>
     <input type="text" id="suName">
@@ -396,11 +405,6 @@ function openSignup(){
     <input type="tel" id="suPhone">
     <label>Choose Password</label>
     <input type="password" id="suPass">
-    <label>Service Group (optional, you can join later)</label>
-    <select id="suGroup">
-      <option value="">Not decided yet</option>
-      ${GROUPS.map(g=>`<option value="${g}">${g}</option>`).join('')}
-    </select>
     <button class="btn gold" onclick="doSignup()">Create Account</button>
   `);
 }
@@ -409,7 +413,6 @@ async function doSignup(){
   const name = document.getElementById('suName').value.trim();
   const phone = document.getElementById('suPhone').value.trim();
   const pass = document.getElementById('suPass').value;
-  const group = document.getElementById('suGroup').value;
   if(!name || !phone || !pass){
     document.getElementById('signupMsg').innerHTML = '<div class="msg err">Please fill in your name, phone number, and password.</div>';
     return;
@@ -419,7 +422,7 @@ async function doSignup(){
     document.getElementById('signupMsg').innerHTML = '<div class="msg err">An account with this phone number already exists. Please log in instead.</div>';
     return;
   }
-  const newUser = {id:uid(), name, phone, password:pass, role:'member', groups: group ? [group] : []};
+  const newUser = {id:uid(), name, phone, password:pass, role:'member', groups: []};
   users.push(newUser);
   await sSet('users', users);
   CURRENT_USER = newUser;
@@ -444,28 +447,28 @@ async function renderHome(main){
       <p>We are glad you found us. Winners Chapel International Ruiru exists to see lives transformed by the Word of God, and to raise people who walk in their full, God given potential.</p>
       <div class="verse">Liberating the world from all oppression of the devil, through the preaching of the Word of Faith.</div>
       <button class="btn gold" onclick="showTab('newperson')">I Am Visiting For The First Time</button>
-      <button class="btn outline" style="background:transparent;color:var(--white);border-color:var(--white)" onclick="showTab('about')">Learn About Us</button>
-    </div>
+      <button class="btn outline" onclick="showTab('about')">Learn About Us</button>
 
-    <div class="grid3">
-      <div class="card">
-        <h3>Sunday Service</h3>
-        <p style="color:var(--grey);font-size:14px">9:00 am to 11:30 am, with Workers Prayer at 8:00 am.</p>
-      </div>
-      <div class="card">
-        <h3>Midweek Service</h3>
-        <p style="color:var(--grey);font-size:14px">Wednesdays, 5:00 pm to 6:30 pm.</p>
-      </div>
-      <div class="card">
-        <h3>Kingdom Advancement Prayers</h3>
-        <p style="color:var(--grey);font-size:14px">Tuesdays, 5:00 pm to 6:00 pm.</p>
+      <div class="grid3" style="margin-top:30px;text-align:center;">
+        <div class="card">
+          <h3>Sunday Service</h3>
+          <p style="color:var(--grey);font-size:14px">9:00 am to 11:30 am, with Workers Prayer at 8:00 am.</p>
+        </div>
+        <div class="card">
+          <h3>Midweek Service</h3>
+          <p style="color:var(--grey);font-size:14px">Wednesdays, 5:00 pm to 6:30 pm.</p>
+        </div>
+        <div class="card">
+          <h3>Kingdom Advancement Prayers</h3>
+          <p style="color:var(--grey);font-size:14px">Tuesdays, 5:00 pm to 6:00 pm.</p>
+        </div>
       </div>
     </div>
 
     <div class="grid2">
       <div class="card">
         <h3>New Here?</h3>
-        <p>Tell us a bit about yourself so we can welcome you well and follow up with you.</p>
+        <p>We would love to welcome you. Let us know a little about you so we can stay in touch.</p>
         <button class="btn" onclick="showTab('newperson')">Get Started</button>
       </div>
       <div class="card">
@@ -601,11 +604,11 @@ async function submitNewPerson(){
 async function renderMembership(main){
   main.innerHTML = `
     <div class="card">
-      <h2>Your Path To Membership</h2>
+      <h2>Covenant Path</h2>
       <p>We are excited that you want to call Winners Chapel Ruiru your church home. Here is what the journey looks like.</p>
 
       <div class="list-item"><strong>Step 1. Believers Foundation Class</strong>
-        <p>This class lays the foundation of your walk with Christ. Our class materials are currently not available online, so please contact the teacher in charge directly to register and get started.</p>
+        <p>This class lays the foundation of your walk with Christ. Your teacher is assigned by the pastor, our class materials are currently not available online, so please contact the teacher in charge directly to register and get started.</p>
         <div class="note">Believers Foundation Class Teacher: <strong>${escapeHTML(SETTINGS.teacherName)}</strong><br>
         Phone: <strong>${escapeHTML(SETTINGS.teacherPhone)}</strong></div>
       </div>
@@ -614,8 +617,8 @@ async function renderMembership(main){
         <p>After completing the foundation class, you will be prepared for water baptism, a public declaration of your new life in Christ.</p>
       </div>
 
-      <div class="list-item"><strong>Step 3. Choose A Service Group</strong>
-        <p>You will then be welcomed to serve in one of our groups: Choir, Sanctuary Keeping, Sunday School Teachers, Security, CCU and Crowd Control, Hospitality, KAPS (which includes the Follow Up Team), or Joel's Company.</p>
+      <div class="list-item"><strong>Step 3. Choose Your Service Groups</strong>
+        <p>You will then be welcomed to serve in one or more of our groups: Choir, Sanctuary Keeping, Sunday School Teachers, Security, CCU and Crowd Control, Hospitality, KAPS (which includes the Follow Up Team), or Joel's Company. You can choose more than one group from your account once you sign up.</p>
       </div>
 
       <div class="list-item"><strong>Step 4. Ongoing Follow Up</strong>
