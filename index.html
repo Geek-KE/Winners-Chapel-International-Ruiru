@@ -157,6 +157,23 @@
   .msg.ok{background:#DDEFE2;color:var(--good);}
   .msg.err{background:#F6DEDE;color:var(--danger);}
 
+  /* TESTIMONY MARQUEE */
+  .testimony-marquee{margin-top:26px;background:#FBF1F1;border-radius:12px;padding:16px 0;overflow:hidden;position:relative;}
+  .testimony-marquee .tm-label{position:relative;text-align:center;font-size:11px;letter-spacing:0.16em;text-transform:uppercase;color:var(--royal);font-weight:bold;margin-bottom:10px;}
+  .testimony-track-wrap{overflow:hidden;width:100%;}
+  .testimony-track{display:flex;width:max-content;animation:testimonyLR 40s linear infinite;}
+  .testimony-track:hover{animation-play-state:paused;}
+  .testimony-set{display:flex;gap:18px;padding-right:18px;flex:none;}
+  @keyframes testimonyLR{
+    0%{transform:translateX(-100%);}
+    100%{transform:translateX(0%);}
+  }
+  .testimony-pill{background:var(--white);border:1px solid var(--line);border-radius:20px;padding:10px 18px;font-size:13px;color:var(--ink);white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,0.06);flex:none;}
+  .testimony-pill strong{color:var(--royal-deep);margin-right:6px;}
+  @media(max-width:640px){
+    .testimony-pill{font-size:12px;padding:8px 14px;}
+  }
+
   .modal-bg{position:fixed;inset:0;background:rgba(11,20,64,0.55);display:none;align-items:center;justify-content:center;z-index:50;padding:16px;}
   .modal-bg.active{display:flex;}
   .modal{background:var(--white);border-radius:12px;padding:24px;max-width:420px;width:100%;max-height:88vh;overflow:auto;}
@@ -338,7 +355,12 @@ async function dbAddFollowup(visitorId, entry){
 }
 
 /* ---------- TESTIMONIES ---------- */
-function rowToTestimony(r){ return { id:r.id, authorId:r.author_id, authorName:r.author_name, text:r.body, status:r.status, submittedAt:r.submitted_at }; }
+// A testimony's lifecycle: pending -> approved (goes live, animated on site) -> expired
+// (auto-unpublished 3 months after it went live). Expired rows are NEVER deleted,
+// they simply stop showing on the public pages and stay queryable in the database.
+const TESTIMONY_LIVE_DAYS = 90; // ~3 months
+
+function rowToTestimony(r){ return { id:r.id, authorId:r.author_id, authorName:r.author_name, text:r.body, status:r.status, submittedAt:r.submitted_at, approvedAt:r.approved_at||null }; }
 async function dbGetTestimonies(){
   if(supabaseClient){
     const { data, error } = await supabaseClient.from('testimonies').select('*').order('submitted_at',{ascending:false});
@@ -357,14 +379,40 @@ async function dbAddTestimony(t){
   await localInsert('testimonies', t);
 }
 async function dbSetTestimonyStatus(id, status){
+  // when a testimony is approved it "goes live" today, so we stamp approved_at
+  // to measure the 3 month auto-unpublish window from that moment
+  const approvedAt = status === 'approved' ? new Date().toISOString() : undefined;
   if(supabaseClient){
-    const { error } = await supabaseClient.from('testimonies').update({status}).eq('id',id);
+    const payload = approvedAt ? { status, approved_at: approvedAt } : { status };
+    const { error } = await supabaseClient.from('testimonies').update(payload).eq('id',id);
     if(error) console.error('update testimony failed', error);
     return;
   }
   const rows = await localAll('testimonies');
   const t = rows.find(r=>r.id===id);
-  if(t){ t.status = status; await localSet('testimonies', rows); }
+  if(t){ t.status = status; if(approvedAt) t.approvedAt = approvedAt; await localSet('testimonies', rows); }
+}
+
+// Returns only testimonies that are approved AND still within their 3 month
+// live window. Any approved testimony past that window gets flipped to
+// 'expired' (status update only — the row is kept in the database) so it
+// stops appearing anywhere on the public site but stays visible to admins
+// via a direct database/report query if ever needed.
+async function getLiveTestimonies(){
+  const items = await dbGetTestimonies();
+  const now = Date.now();
+  const live = [];
+  for(const t of items){
+    if(t.status !== 'approved') continue;
+    const wentLive = t.approvedAt || t.submittedAt;
+    const ageDays = (now - new Date(wentLive).getTime()) / 86400000;
+    if(ageDays > TESTIMONY_LIVE_DAYS){
+      dbSetTestimonyStatus(t.id, 'expired'); // fire and forget, keeps row in DB
+      continue;
+    }
+    live.push(t);
+  }
+  return live;
 }
 
 /* ---------- COUNSELLING ---------- */
@@ -719,6 +767,8 @@ function logout(){
 
 /* ---------------- HOME ---------------- */
 async function renderHome(main){
+  const liveTestimonies = await getLiveTestimonies();
+  const marqueeHTML = buildTestimonyMarquee(liveTestimonies);
   main.innerHTML = `
     <div class="hero">
       <h2>Welcome to the Home of Signs and Wonders</h2>
@@ -743,20 +793,28 @@ async function renderHome(main){
       </div>
     </div>
 
-    ${CURRENT_USER ? '' : `
-    <div class="grid2">
-      <div class="card">
-        <h3>New Here?</h3>
-        <p>We would love to welcome you. Let us know a little about you so we can stay in touch.</p>
-        <button class="btn" onclick="showTab('newperson')">Get Started</button>
-      </div>
-      <div class="card">
-        <h3>Already A Member?</h3>
-        <p>Log in to check in for service, join your group meeting, or share your testimony.</p>
-        <button class="btn outline" onclick="openLogin()">Member Login</button>
+    ${marqueeHTML}
+  `;
+}
+
+// Builds the scrolling left-to-right testimony marquee shown on the home page.
+// Returns an empty string (renders nothing) if there are no live testimonies.
+function buildTestimonyMarquee(items){
+  if(!items || !items.length) return '';
+  const pills = items.map(t=>`
+    <div class="testimony-pill"><strong>${escapeHTML(t.authorName)}:</strong>${escapeHTML(t.text)}</div>
+  `).join('');
+  // duplicate the set so the animation loops seamlessly
+  return `
+    <div class="testimony-marquee">
+      <div class="tm-label">Testimonies</div>
+      <div class="testimony-track-wrap">
+        <div class="testimony-track">
+          <div class="testimony-set">${pills}</div>
+          <div class="testimony-set">${pills}</div>
+        </div>
       </div>
     </div>
-    `}
   `;
 }
 
@@ -1146,8 +1204,7 @@ async function addFollowup(visitorId){
 
 /* ---------------- TESTIMONY (public list + admin approve happens in admin tab) ---------------- */
 async function renderTestimony(main){
-  const items = await dbGetTestimonies();
-  const approved = items.filter(t=>t.status==='approved');
+  const approved = await getLiveTestimonies();
   main.innerHTML = `
     <div class="card">
       <h2>Testimonies</h2>
