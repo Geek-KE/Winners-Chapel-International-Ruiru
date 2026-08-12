@@ -62,15 +62,22 @@
   .app{max-width:100%;margin:0 auto;min-height:100vh;background:var(--white);}
 
   /* HEADER */
-  header.site{background:var(--royal);color:var(--white);padding:16px 20px;position:relative;overflow:visible;display:flex;align-items:center;justify-content:space-between;gap:12px;box-shadow:0 2px 10px rgba(0,0,0,0.25);}
-  
+  header.site{background:var(--white);color:var(--royal-deep);padding:16px 20px;position:relative;overflow:visible;display:flex;align-items:center;justify-content:space-between;gap:12px;box-shadow:0 2px 10px rgba(0,0,0,0.12);border-bottom:1px solid var(--line);}
+
+  .topbar{background:var(--royal);display:flex;flex-wrap:wrap;gap:4px 22px;padding:9px 20px;}
+  .topbar button{background:none;border:none;color:var(--white);font-weight:700;font-size:12.5px;letter-spacing:0.02em;padding:2px 0;cursor:pointer;font-family:'Inter',sans-serif;}
+  .topbar button:hover{color:var(--gold-light);}
+  @media(max-width:640px){
+    .topbar{padding:8px 14px;gap:4px 16px;}
+    .topbar button{font-size:11.5px;}
+  }  
   .brand{display:flex;align-items:center;gap:14px;position:relative;z-index:1;}
-  .crest{width:50px;height:50px;border-radius:50%;background:var(--white);display:flex;align-items:center;justify-content:center;font-weight:bold;color:var(--royal);font-size:18px;flex:none;overflow:hidden;}
+  .crest{width:50px;height:50px;border-radius:50%;background:var(--white);display:flex;align-items:center;justify-content:center;font-weight:bold;color:var(--royal);font-size:18px;flex:none;overflow:hidden;border:2px solid var(--royal);}
   .crest img{width:100%;height:100%;object-fit:cover;}
-  .brand-text .kicker{color:var(--gold-light);font-size:11px;letter-spacing:0.16em;text-transform:uppercase;}
-  .brand-text h1{color:var(--white);font-size:19px;margin:2px 0 0 0;}
+  .brand-text .kicker{color:var(--royal);font-size:11px;letter-spacing:0.16em;text-transform:uppercase;}
+  .brand-text h1{color:var(--royal-deep);font-size:19px;margin:2px 0 0 0;}
   .header-right{display:flex;align-items:center;gap:10px;position:relative;z-index:1;}
-  .userbar{font-size:13px;color:var(--gold-light);text-align:right;}
+  .userbar{font-size:13px;color:var(--royal-deep);text-align:right;}
 
   /* HAMBURGER */
   .hamburger{background:var(--gold);border:none;width:42px;height:42px;border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;flex:none;}
@@ -168,6 +175,26 @@
   .schedule-item .day{font-weight:bold;color:var(--royal-deep);}
   .schedule-item .time{color:var(--ink);font-weight:bold;}
 
+  /* Rounded pill-style schedule badges (Service Times, meeting info, etc.) */
+  .schedule-pills{display:flex;flex-wrap:wrap;gap:10px;margin:14px 0;}
+  .schedule-pill{
+    flex:0 0 auto;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;
+    background:linear-gradient(160deg, var(--royal-deep), #4a0000);
+    border-radius:999px;color:var(--white);
+    padding:10px 22px;text-align:center;
+    box-shadow:0 4px 14px rgba(0,0,0,0.18);
+  }
+  .schedule-pill .pill-main{display:block;font-weight:800;font-size:13.5px;line-height:1.3;white-space:nowrap;}
+  .schedule-pill .pill-sub{display:block;font-size:11px;color:var(--gold-light);margin-top:2px;font-weight:500;white-space:nowrap;}
+  .schedule-pill.on-dark{background:rgba(255,255,255,0.14);border:1px solid rgba(255,255,255,0.4);backdrop-filter:blur(2px);box-shadow:none;}
+  .schedule-pill.on-dark .pill-main{color:var(--white);}
+  @media(max-width:480px){
+    .schedule-pills{justify-content:center;}
+    .schedule-pill{padding:9px 16px;}
+    .schedule-pill .pill-main{font-size:12px;white-space:normal;}
+    .schedule-pill .pill-sub{font-size:10px;white-space:normal;}
+  }
+
   .note{background:#FCEACB;border-radius:8px;padding:12px 14px;font-size:13px;color:#7A5D06;margin-top:14px;}
   .msg{padding:10px 14px;border-radius:7px;margin-bottom:14px;font-size:14px;}
   .msg.ok{background:#DDEFE2;color:var(--good);}
@@ -207,6 +234,8 @@
 <body>
 <div id="preloader"><img src="Logo.png" alt="Loading..." onerror="this.style.display='none'"></div>
 <div class="app">
+
+  <div class="topbar" id="topbar"></div>
 
   <header class="site">
     <div class="brand">
@@ -741,7 +770,19 @@ async function init(){
   restoreSignupSession();
 }
 
+function renderTopbar(){
+  const bar = document.getElementById('topbar');
+  if(!bar) return;
+  if(CURRENT_USER){ bar.innerHTML = ''; bar.style.display = 'none'; return; }
+  bar.style.display = 'flex';
+  bar.innerHTML = `
+    <button onclick="showTab('newperson')">I Am Visiting For The First Time</button>
+    <button onclick="showTab('about')">Learn About Us</button>
+  `;
+}
+
 function renderNav(){
+  renderTopbar();
   const nav = document.getElementById('tabs');
   nav.innerHTML = '<div class="nav-header"><strong>Menu</strong><button class="nav-close" onclick="toggleNav()">&times;</button></div>';
   TABS.forEach(t=>{
@@ -1243,22 +1284,11 @@ async function renderHome(main){
       <h2>Welcome to the Home of Signs and Wonders</h2>
       <p>We are happy you are worshipping with us today. Winners Chapel International Ruiru exists to see lives transformed by the Word of God, and to raise people who walk in their full, God given potential.</p>
       <div class="verse">Liberating the world from all oppression of the devil, through the preaching of the Word of Faith.</div>
-      ${CURRENT_USER ? '' : '<button class="btn gold" onclick="showTab(\'newperson\')">I Am Visiting For The First Time</button>'}
-      ${CURRENT_USER ? '' : '<button class="btn outline" onclick="showTab(\'about\')">Learn About Us</button>'}
 
-      <div class="grid3" style="margin-top:30px;text-align:center;">
-        <div class="card">
-          <h3>Sunday Service</h3>
-          <p style="color:var(--ink);font-size:14px">9:00 am to 11:30 am, with Workers Prayer at 8:00 am.</p>
-        </div>
-        <div class="card">
-          <h3>Midweek Service</h3>
-          <p style="color:var(--ink);font-size:14px">Wednesdays, 5:00 pm to 6:30 pm.</p>
-        </div>
-        <div class="card">
-          <h3>Kingdom Advancement Prayers</h3>
-          <p style="color:var(--ink);font-size:14px">Tuesdays, 5:00 pm to 6:00 pm.</p>
-        </div>
+      <div class="schedule-pills" style="justify-content:center;margin-top:30px;">
+        <div class="schedule-pill on-dark"><span class="pill-main">Sunday, 9:00 &ndash; 11:30 am</span><span class="pill-sub">Sunday Service</span></div>
+        <div class="schedule-pill on-dark"><span class="pill-main">Wednesday, 5:00 &ndash; 6:30 pm</span><span class="pill-sub">Midweek Service</span></div>
+        <div class="schedule-pill on-dark"><span class="pill-main">Tuesday, 5:00 &ndash; 6:00 pm</span><span class="pill-sub">Kingdom Advancement Prayers</span></div>
       </div>
     </div>
 
@@ -2019,12 +2049,14 @@ async function renderAbout(main){
 
     <div class="card">
       <h2>Service Times</h2>
-      <div class="schedule-item"><span class="day">Sunday, Workers Prayer</span><span class="time">8:00 am to 8:45 am</span></div>
-      <div class="schedule-item"><span class="day">Sunday Main Service</span><span class="time">9:00 am to 11:30 am</span></div>
-      <div class="schedule-item"><span class="day">Monday to Friday, Covenant Hour of Prayer</span><span class="time">6:30 am to 7:30 am</span></div>
-      <div class="schedule-item"><span class="day">Tuesday, Kingdom Advancement Prayers</span><span class="time">5:00 pm to 6:00 pm</span></div>
-      <div class="schedule-item"><span class="day">Wednesday, Midweek Service</span><span class="time">5:00 pm to 6:30 pm</span></div>
-      <div class="schedule-item"><span class="day">Saturday, Covenant Hour of Prayer</span><span class="time">8:00 am to 9:00 am</span></div>
+      <div class="schedule-pills">
+        <div class="schedule-pill"><span class="pill-main">Sunday, 8:00 &ndash; 8:45 am</span><span class="pill-sub">Workers Prayer</span></div>
+        <div class="schedule-pill"><span class="pill-main">Sunday, 9:00 &ndash; 11:30 am</span><span class="pill-sub">Sunday Main Service</span></div>
+        <div class="schedule-pill"><span class="pill-main">Mon &ndash; Fri, 6:30 &ndash; 7:30 am</span><span class="pill-sub">Covenant Hour of Prayer</span></div>
+        <div class="schedule-pill"><span class="pill-main">Tuesday, 5:00 &ndash; 6:00 pm</span><span class="pill-sub">Kingdom Advancement Prayers</span></div>
+        <div class="schedule-pill"><span class="pill-main">Wednesday, 5:00 &ndash; 6:30 pm</span><span class="pill-sub">Midweek Service</span></div>
+        <div class="schedule-pill"><span class="pill-main">Saturday, 8:00 &ndash; 9:00 am</span><span class="pill-sub">Covenant Hour of Prayer</span></div>
+      </div>
       <div class="note">First week of every month, Wednesday to Friday, we hold our Week of Spiritual Emphasis, a season of fasting and prayer. These dates are subject to change as announced from the pulpit.</div>
     </div>
 
