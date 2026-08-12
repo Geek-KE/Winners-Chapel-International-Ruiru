@@ -7,8 +7,8 @@
 <link rel="icon" type="image/png" href="Logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js" defer></script>
 <style>
   :root{
     --royal:#8B0000;
@@ -745,11 +745,12 @@ function normalizePhone(p){ return (p||'').replace(/\D/g,''); }
 
 /* ---------------- INIT ---------------- */
 async function init(){
-  const savedSettings = await dbGetSettings();
+  // Fetch settings and restore any saved session in parallel rather than
+  // one after another — this was the main reason the hero took so long to
+  // appear, since each is its own network round trip to Supabase.
+  const [savedSettings] = await Promise.all([ dbGetSettings(), restoreSession() ]);
   if(savedSettings) SETTINGS = Object.assign(SETTINGS, savedSettings);
   else await dbSaveSettings(SETTINGS);
-
-  await restoreSession();
 
   let startTab = 'home';
   try{
@@ -1276,8 +1277,10 @@ function logout(){
 
 /* ---------------- HOME ---------------- */
 async function renderHome(main){
-  const liveTestimonies = await getLiveTestimonies();
-  const marqueeHTML = buildTestimonyMarquee(liveTestimonies);
+  // Paint the hero immediately — don't make people stare at a blank/loading
+  // screen while we wait on a network round trip for testimonies. The
+  // marquee (which needs that data) is fetched afterward and slotted in
+  // once it's ready.
   main.innerHTML = `
     <div class="hero">
       <h2>Welcome to the Home of Signs and Wonders</h2>
@@ -1291,8 +1294,12 @@ async function renderHome(main){
       </div>
     </div>
 
-    ${marqueeHTML}
+    <div id="testimonyMarquee"></div>
   `;
+
+  const liveTestimonies = await getLiveTestimonies();
+  const marqueeSlot = document.getElementById('testimonyMarquee');
+  if(marqueeSlot) marqueeSlot.outerHTML = buildTestimonyMarquee(liveTestimonies);
 }
 
 // Builds the scrolling left-to-right testimony marquee shown on the home page.
