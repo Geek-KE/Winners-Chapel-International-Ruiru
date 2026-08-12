@@ -395,6 +395,21 @@ async function dbUpdateVisitorPrayer(id, patch){
   const v = rows.find(r=>r.id===id);
   if(v){ Object.assign(v, patch); await localSet('visitors', rows); }
 }
+// Removes a prayer request from a visitor record. Only allowed while the
+// request is still pending — once a request has been approved, it must stay
+// on record (it may already have been prayed for, or be awaiting prayer),
+// so this intentionally will not touch it.
+async function dbDeleteVisitorPrayer(id){
+  const patch = { prayer:null, prayerStatus:'pending', prayed:false, prayedBy:null, prayedAt:null };
+  if(supabaseClient){
+    const { error } = await supabaseClient.from('visitors').update({ prayer:null, prayer_status:'pending', prayed:false, prayed_by:null, prayed_at:null }).eq('id',id);
+    if(error) console.error('delete visitor prayer failed', error);
+    return;
+  }
+  const rows = await localAll('visitors');
+  const v = rows.find(r=>r.id===id);
+  if(v){ Object.assign(v, patch); await localSet('visitors', rows); }
+}
 
 /* ---------- FOLLOW UPS ---------- */
 async function dbGetFollowups(visitorId){
@@ -2128,7 +2143,9 @@ async function renderAdmin(main){
             <p>${escapeHTML(v.prayer)}</p>
             ${v.prayed ? `<div class="meta">Prayed for by ${escapeHTML(v.prayedBy||'-')} on ${v.prayedAt ? new Date(v.prayedAt).toLocaleString() : '-'}</div>` : ''}
             ${v.prayerStatus!=='approved' ? `<button class="btn small gold" onclick="approvePrayerRequest('${v.id}')">Approve Request</button>` : ''}
+            ${v.prayerStatus!=='approved' && isSuper ? `<button class="btn small danger" onclick="deletePrayerRequest('${v.id}')">Delete</button>` : ''}
             ${v.prayerStatus==='approved' && !v.prayed && isSuper ? `<label style="display:flex;align-items:center;gap:6px;margin-top:8px;font-size:13px"><input type="checkbox" onclick="markPrayerPrayed('${v.id}', this)"> Mark as prayed for</label>` : ''}
+            ${v.prayerStatus==='approved' && isSuper ? `<button class="btn small danger" style="margin-top:8px" onclick="deletePrayerRequest('${v.id}')">Delete</button>` : ''}
           </div>
         `).join('') || '<p style="font-size:14px;color:var(--grey)">No prayer requests submitted yet.</p>'}
       </div>
@@ -2266,6 +2283,16 @@ async function approvePrayerRequest(id){
   if(!CURRENT_USER || !(CURRENT_USER.role==='super_admin' || CURRENT_USER.groups.includes("KAPS (Kingdom Advancement Prayer Squad)"))) return;
   await dbUpdateVisitorPrayer(id, {prayerStatus:'approved'});
   await logActivity('approve_prayer_request', `Approved a confidential prayer request (${id})`);
+  renderAdmin(document.getElementById('main'));
+}
+async function deletePrayerRequest(id){
+  // Super admin only.
+  if(!CURRENT_USER || CURRENT_USER.role!=='super_admin') return;
+  const visitors = await dbGetVisitors();
+  const v = visitors.find(x=>x.id===id);
+  if(!confirm('Delete this prayer request permanently? This cannot be undone.')) return;
+  await dbDeleteVisitorPrayer(id);
+  await logActivity('delete_prayer_request', `Deleted a confidential prayer request (${id})${v && v.prayerStatus==='approved' ? ' that had already been approved' : ''}`);
   renderAdmin(document.getElementById('main'));
 }
 async function markPrayerPrayed(id, checkbox){
