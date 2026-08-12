@@ -194,6 +194,26 @@
   }
   .schedule-pill.maroon .pill-main{color:var(--white);}
   .schedule-pill.maroon .pill-sub{color:var(--gold-light);}
+
+  /* Brush-stroke style pill (Welcome page) - rough painted edge instead of a clean pill */
+  .schedule-pills.brush-row{gap:20px 26px;}
+  .schedule-pill.brush{
+    position:relative;background:transparent;border:none;border-radius:6px 10px 8px 12px;
+    box-shadow:none;padding:4px 6px;isolation:isolate;
+  }
+  .schedule-pill.brush::before{
+    content:"";position:absolute;inset:0 -1px;z-index:0;
+    background:var(--white);border-radius:inherit;
+    filter:url(#brushRough);
+  }
+  .schedule-pill.brush::after{
+    content:"";position:absolute;inset:2px 3px;z-index:-1;
+    background:rgba(255,255,255,0.9);border-radius:8px;
+  }
+  .schedule-pill.brush:nth-child(2)::before{transform:rotate(0.7deg);}
+  .schedule-pill.brush:nth-child(3)::before{transform:rotate(-1deg);}
+  .schedule-pill.brush .pill-main,
+  .schedule-pill.brush .pill-sub{position:relative;z-index:1;}
   @media(max-width:480px){
     .schedule-pills{justify-content:center;}
     .schedule-pill{padding:9px 16px;}
@@ -241,6 +261,24 @@
 </style>
 </head>
 <body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <filter id="brushRough" x="-30%" y="-70%" width="160%" height="260%">
+    <feTurbulence type="fractalNoise" baseFrequency="0.09 0.4" numOctaves="4" seed="11" result="grain"/>
+    <feColorMatrix in="grain" type="matrix"
+      values="0 0 0 0 0
+              0 0 0 0 0
+              0 0 0 0 0
+              0 0 0 5 -0.6" result="grainMask"/>
+    <feTurbulence type="fractalNoise" baseFrequency="0.015 0.18" numOctaves="3" seed="11" result="edgeNoise"/>
+    <feDisplacementMap in="SourceGraphic" in2="edgeNoise" scale="10" xChannelSelector="R" yChannelSelector="G" result="rough"/>
+    <feComposite in="rough" in2="grainMask" operator="in" result="scraped"/>
+    <feColorMatrix in="scraped" type="matrix"
+      values="0 0 0 0 1
+              0 0 0 0 1
+              0 0 0 0 1
+              0 0 0 1 0"/>
+  </filter>
+</svg>
 <div id="preloader"><img src="Logo.png" alt="Loading..." onerror="this.style.display='none'"></div>
 <div class="app">
 
@@ -1298,10 +1336,10 @@ async function renderHome(main){
       <p>We are happy you are worshipping with us today. Winners Chapel International Ruiru exists to see lives transformed by the Word of God, and to raise people who walk in their full, God given potential.</p>
       <div class="verse">Liberating the world from all oppression of the devil, through the preaching of the Word of Faith.</div>
 
-      <div class="schedule-pills" style="justify-content:center;margin-top:30px;">
-        <div class="schedule-pill"><span class="pill-main">Sunday, 9:00 &ndash; 11:30 am</span><span class="pill-sub">Sunday Service</span></div>
-        <div class="schedule-pill"><span class="pill-main">Wednesday, 5:00 &ndash; 6:30 pm</span><span class="pill-sub">Midweek Service</span></div>
-        <div class="schedule-pill"><span class="pill-main">Tuesday, 5:00 &ndash; 6:00 pm</span><span class="pill-sub">Kingdom Advancement Prayers</span></div>
+      <div class="schedule-pills brush-row" style="justify-content:center;margin-top:30px;">
+        <div class="schedule-pill brush"><span class="pill-main">Sunday, 9:00 &ndash; 11:30 am</span><span class="pill-sub">Sunday Service</span></div>
+        <div class="schedule-pill brush"><span class="pill-main">Wednesday, 5:00 &ndash; 6:30 pm</span><span class="pill-sub">Midweek Service</span></div>
+        <div class="schedule-pill brush"><span class="pill-main">Tuesday, 5:00 &ndash; 6:00 pm</span><span class="pill-sub">Kingdom Advancement Prayers</span></div>
       </div>
     </div>
 
