@@ -177,15 +177,23 @@
   .schedule-pills{display:flex;flex-wrap:wrap;gap:10px;margin:14px 0;}
   .schedule-pill{
     flex:0 0 auto;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;
-    background:linear-gradient(160deg, var(--royal-deep), #4a0000);
-    border-radius:999px;color:var(--white);
+    background:var(--white);
+    border:1px solid var(--line);
+    border-radius:999px;color:#000;
     padding:10px 22px;text-align:center;
-    box-shadow:0 4px 14px rgba(0,0,0,0.18);
+    box-shadow:0 4px 14px rgba(0,0,0,0.1);
   }
-  .schedule-pill .pill-main{display:block;font-weight:800;font-size:13.5px;line-height:1.3;white-space:nowrap;}
-  .schedule-pill .pill-sub{display:block;font-size:11px;color:var(--gold-light);margin-top:2px;font-weight:500;white-space:nowrap;}
+  .schedule-pill .pill-main{display:block;font-weight:800;font-size:13.5px;line-height:1.3;white-space:nowrap;color:#000;}
+  .schedule-pill .pill-sub{display:block;font-size:11px;color:#000;margin-top:2px;font-weight:500;white-space:nowrap;}
   .schedule-pill.on-dark{background:rgba(255,255,255,0.14);border:1px solid rgba(255,255,255,0.4);backdrop-filter:blur(2px);box-shadow:none;}
   .schedule-pill.on-dark .pill-main{color:var(--white);}
+  .schedule-pill.maroon{
+    background:linear-gradient(160deg, var(--royal-deep), #4a0000);
+    border:none;color:var(--white);
+    box-shadow:0 4px 14px rgba(0,0,0,0.18);
+  }
+  .schedule-pill.maroon .pill-main{color:var(--white);}
+  .schedule-pill.maroon .pill-sub{color:var(--gold-light);}
   @media(max-width:480px){
     .schedule-pills{justify-content:center;}
     .schedule-pill{padding:9px 16px;}
@@ -2059,12 +2067,12 @@ async function renderAbout(main){
     <div class="card">
       <h2>Service Times</h2>
       <div class="schedule-pills">
-        <div class="schedule-pill"><span class="pill-main">Sunday, 8:00 &ndash; 8:45 am</span><span class="pill-sub">Workers Prayer</span></div>
-        <div class="schedule-pill"><span class="pill-main">Sunday, 9:00 &ndash; 11:30 am</span><span class="pill-sub">Sunday Main Service</span></div>
-        <div class="schedule-pill"><span class="pill-main">Mon &ndash; Fri, 6:30 &ndash; 7:30 am</span><span class="pill-sub">Covenant Hour of Prayer</span></div>
-        <div class="schedule-pill"><span class="pill-main">Tuesday, 5:00 &ndash; 6:00 pm</span><span class="pill-sub">Kingdom Advancement Prayers</span></div>
-        <div class="schedule-pill"><span class="pill-main">Wednesday, 5:00 &ndash; 6:30 pm</span><span class="pill-sub">Midweek Service</span></div>
-        <div class="schedule-pill"><span class="pill-main">Saturday, 8:00 &ndash; 9:00 am</span><span class="pill-sub">Covenant Hour of Prayer</span></div>
+        <div class="schedule-pill maroon"><span class="pill-main">Sunday, 8:00 &ndash; 8:45 am</span><span class="pill-sub">Workers Prayer</span></div>
+        <div class="schedule-pill maroon"><span class="pill-main">Sunday, 9:00 &ndash; 11:30 am</span><span class="pill-sub">Sunday Main Service</span></div>
+        <div class="schedule-pill maroon"><span class="pill-main">Mon &ndash; Fri, 6:30 &ndash; 7:30 am</span><span class="pill-sub">Covenant Hour of Prayer</span></div>
+        <div class="schedule-pill maroon"><span class="pill-main">Tuesday, 5:00 &ndash; 6:00 pm</span><span class="pill-sub">Kingdom Advancement Prayers</span></div>
+        <div class="schedule-pill maroon"><span class="pill-main">Wednesday, 5:00 &ndash; 6:30 pm</span><span class="pill-sub">Midweek Service</span></div>
+        <div class="schedule-pill maroon"><span class="pill-main">Saturday, 8:00 &ndash; 9:00 am</span><span class="pill-sub">Covenant Hour of Prayer</span></div>
       </div>
       <div class="note">First week of every month, Wednesday to Friday, we hold our Week of Spiritual Emphasis, a season of fasting and prayer. These dates are subject to change as announced from the pulpit.</div>
     </div>
