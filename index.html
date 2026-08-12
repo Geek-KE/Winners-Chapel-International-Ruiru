@@ -773,7 +773,6 @@ async function init(){
 function renderTopbar(){
   const bar = document.getElementById('topbar');
   if(!bar) return;
-  if(CURRENT_USER){ bar.innerHTML = ''; bar.style.display = 'none'; return; }
   bar.style.display = 'flex';
   bar.innerHTML = `
     <button onclick="showTab('newperson')">I Am Visiting For The First Time</button>
