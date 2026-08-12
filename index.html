@@ -50,6 +50,11 @@
     100%{transform:scale(0.88);opacity:0.55;}
   }
   #preloader.loaded{opacity:0;visibility:hidden;pointer-events:none;}
+
+  /* IN-APP TAB LOADER (shown briefly while a panel's content is being fetched) */
+  .tab-loader{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:60px 20px;min-height:40vh;}
+  .tab-loader img{width:min(30vw,90px);animation:preloaderPulse 1.15s ease-in-out infinite;}
+  .tab-loader span{color:var(--grey);font-size:13px;letter-spacing:0.02em;}
   h1,h2,h3,h4{font-family:'Playfair Display',serif;letter-spacing:0.01em;margin:0 0 8px 0;color:var(--royal-deep);}
   p{line-height:1.6;}
   button{font-family:inherit;cursor:pointer;}
@@ -535,10 +540,20 @@ async function dbAddAttendance(dateKey, entry){
     // without a smartphone" entries made by an Admin/Super Admin; add them to the
     // attendance table (manual boolean, checked_in_by text) if not already present.
     const { error } = await supabaseClient.from('attendance').insert({ service_date:dateKey, user_id:entry.userId, name:entry.name, distance_meters:entry.distance, manual:!!entry.manual, checked_in_by:entry.checkedInBy||null });
-    if(error) console.error('save attendance failed', error);
-    return;
+    if(error){
+      // 23505 = unique_violation: the database itself enforces one check in per
+      // person per day (see attendance_one_checkin_per_user in supabase_setup.sql),
+      // so this fires if someone double-taps or two requests race each other.
+      if(error.code === '23505') return { alreadyCheckedIn:true };
+      console.error('save attendance failed', error);
+      return { error };
+    }
+    return { ok:true };
   }
+  const rows = await localAll('attendance');
+  if(rows.find(r=>r.dateKey===dateKey && r.userId===entry.userId)) return { alreadyCheckedIn:true };
   await localInsert('attendance', Object.assign({dateKey}, entry));
+  return { ok:true };
 }
 
 /* ---------- GROUP MEETING ATTENDANCE ---------- */
@@ -557,10 +572,19 @@ async function dbAddMeetingAttendance(group, dateKey, entry){
     // smartphone" entries made by that group's admin/leader; add these columns
     // (manual boolean, checked_in_by text) to meeting_attendance if not already present.
     const { error } = await supabaseClient.from('meeting_attendance').insert({ group_name:group, meeting_date:dateKey, user_id:entry.userId, name:entry.name, manual:!!entry.manual, checked_in_by:entry.checkedInBy||null });
-    if(error) console.error('save meeting attendance failed', error);
-    return;
+    if(error){
+      // 23505 = unique_violation, enforced by meeting_attendance_one_checkin_per_user
+      // in supabase_setup.sql: the database itself blocks a second check in.
+      if(error.code === '23505') return { alreadyCheckedIn:true };
+      console.error('save meeting attendance failed', error);
+      return { error };
+    }
+    return { ok:true };
   }
+  const rows = await localAll('meeting_attendance');
+  if(rows.find(r=>r.group===group && r.dateKey===dateKey && r.userId===entry.userId)) return { alreadyCheckedIn:true };
   await localInsert('meeting_attendance', Object.assign({group, dateKey}, entry));
+  return { ok:true };
 }
 
 /* ---------- ABSENCES ---------- */
@@ -765,13 +789,12 @@ async function showTab(id){
   persistActiveTab(id);
   renderNav();
   const main = document.getElementById('main');
-  main.innerHTML = '<p style="color:#999">Loading...</p>';
+  main.innerHTML = '<div class="tab-loader"><img src="Logo.png" alt="Loading..." onerror="this.style.display=\'none\'"><span>Loading…</span></div>';
   const renderers = {
     home: renderHome, newperson: renderNewPerson, membership: renderMembership,
     account: renderAccount, checkin: renderCheckin, followup: renderFollowup, testimony: renderTestimony,
     about: renderAbout, admin: renderAdmin
   };
-  main.innerHTML = '';
   await renderers[id](main);
 }
 
@@ -1763,7 +1786,16 @@ async function manualCheckin(){
     refreshCheckinSub();
     return;
   }
-  await dbAddAttendance(todayKey, {userId:u.id, name:u.name, distance:null, manual:true, checkedInBy:CURRENT_USER.name});
+  const result = await dbAddAttendance(todayKey, {userId:u.id, name:u.name, distance:null, manual:true, checkedInBy:CURRENT_USER.name});
+  if(result && result.alreadyCheckedIn){
+    msg.innerHTML = `<div class="msg err">${escapeHTML(u.name)} has already checked in today.</div>`;
+    refreshCheckinSub();
+    return;
+  }
+  if(result && result.error){
+    msg.innerHTML = `<div class="msg err">Could not save the check in. Please try again.</div>`;
+    return;
+  }
   await logActivity('manual_checkin', `Checked in "${u.name}" for Sunday service on their behalf`);
   msg.innerHTML = `<div class="msg ok">${escapeHTML(u.name)} checked in.</div>`;
   refreshCheckinSub();
@@ -1794,7 +1826,16 @@ function tryCheckin(){
       const todayKey = new Date().toISOString().slice(0,10);
       const record = await dbGetAttendance(todayKey);
       if(!record.find(r=>r.userId===CURRENT_USER.id)){
-        await dbAddAttendance(todayKey, {userId:CURRENT_USER.id, name:CURRENT_USER.name, distance:Math.round(dist)});
+        const result = await dbAddAttendance(todayKey, {userId:CURRENT_USER.id, name:CURRENT_USER.name, distance:Math.round(dist)});
+        if(result && result.alreadyCheckedIn){
+          msg.innerHTML = '<div class="msg err">You have already checked in today.</div>';
+          refreshCheckinSub();
+          return;
+        }
+        if(result && result.error){
+          msg.innerHTML = '<div class="msg err">Could not save your check in. Please try again.</div>';
+          return;
+        }
         await logActivity('checkin', 'Checked in for Sunday service');
       }
       refreshCheckinSub();
@@ -1875,7 +1916,11 @@ async function checkinMeeting(group){
   const todayKey = new Date().toISOString().slice(0,10);
   const record = await dbGetMeetingAttendance(group, todayKey);
   if(!record.find(r=>r.userId===CURRENT_USER.id)){
-    await dbAddMeetingAttendance(group, todayKey, {userId:CURRENT_USER.id, name:CURRENT_USER.name});
+    const result = await dbAddMeetingAttendance(group, todayKey, {userId:CURRENT_USER.id, name:CURRENT_USER.name});
+    if(result && (result.alreadyCheckedIn || result.error)){
+      refreshCheckinSub();
+      return;
+    }
     await logActivity('checkin_meeting', `Checked in for "${group}"`);
   }
   refreshCheckinSub();
@@ -1906,7 +1951,16 @@ async function manualCheckinMeeting(group){
     refreshCheckinSub();
     return;
   }
-  await dbAddMeetingAttendance(group, todayKey, {userId:u.id, name:u.name, manual:true, checkedInBy:CURRENT_USER.name});
+  const result = await dbAddMeetingAttendance(group, todayKey, {userId:u.id, name:u.name, manual:true, checkedInBy:CURRENT_USER.name});
+  if(result && result.alreadyCheckedIn){
+    if(msg) msg.innerHTML = `<div class="msg err" style="padding:6px 10px;font-size:12px;">${escapeHTML(u.name)} has already checked in today.</div>`;
+    refreshCheckinSub();
+    return;
+  }
+  if(result && result.error){
+    if(msg) msg.innerHTML = `<div class="msg err" style="padding:6px 10px;font-size:12px;">Could not save the check in. Please try again.</div>`;
+    return;
+  }
   await logActivity('manual_checkin_meeting', `Checked in "${u.name}" for "${group}" (no smartphone)`);
   refreshCheckinSub();
 }
@@ -1995,8 +2049,19 @@ async function renderAdmin(main){
     `;
   }
 
+  // Fetch everything this panel needs in parallel instead of one-by-one, so the
+  // page waits on the single slowest request rather than the sum of all of them.
+  const needsPrayer = isSuper || CURRENT_USER.groups.includes("KAPS (Kingdom Advancement Prayer Squad)");
+  const [testimonies, absences, allVisitors, users, missedMembers, activityLogRows] = await Promise.all([
+    dbGetTestimonies(),
+    dbGetAbsences(),
+    needsPrayer ? dbGetVisitors() : Promise.resolve([]),
+    isSuper ? dbGetUsers() : Promise.resolve([]),
+    getMissedTwoSundaysMembers(),
+    isSuper ? dbGetActivityLog() : Promise.resolve([])
+  ]);
+
   // testimonies: pending ones need approve/reject, all testimonies can be deleted by an admin
-  const testimonies = await dbGetTestimonies();
   const pending = testimonies.filter(t=>t.status==='pending');
   const nonPending = testimonies.filter(t=>t.status!=='pending');
 
@@ -2031,7 +2096,6 @@ async function renderAdmin(main){
 
   // absence notes, only super admin sees author
   let absenceBlock = '';
-  const absences = await dbGetAbsences();
   absenceBlock = `
     <div class="card">
       <h3>Absence Notes</h3>
@@ -2048,8 +2112,7 @@ async function renderAdmin(main){
   // lifecycle: pending -> approved (by pastor/super admin or KAPS leadership) -> prayed
   // for (ticked only by the pastor/super admin, once someone has actually prayed for it)
   let prayerBlock = '';
-  if(isSuper || CURRENT_USER.groups.includes("KAPS (Kingdom Advancement Prayer Squad)")){
-    const allVisitors = await dbGetVisitors();
+  if(needsPrayer){
     const visitors = allVisitors.filter(v=>v.prayer);
     prayerBlock = `
       <div class="card">
@@ -2075,7 +2138,6 @@ async function renderAdmin(main){
   // user role management
   let userBlock = '';
   if(isSuper){
-    const users = await dbGetUsers();
     userBlock = `
       <div class="card">
         <h3>Manage Members</h3>
@@ -2114,7 +2176,6 @@ async function renderAdmin(main){
   }
 
   // attendance analytics: flag members who missed the last 2 Sundays in a row
-  const missedMembers = await getMissedTwoSundaysMembers();
   const followUpBlock = `
     <div class="card">
       <h3>Follow Up Radar &mdash; Missed 2 Sundays In A Row (${missedMembers.length})</h3>
@@ -2135,7 +2196,7 @@ async function renderAdmin(main){
   // activity log, visible to super admin only, shows everything that happened on the site
   let activityBlock = '';
   if(isSuper){
-    const log = await dbGetActivityLog();
+    const log = activityLogRows;
     activityBlock = `
       <div class="card">
         <h3>Activity Log</h3>
