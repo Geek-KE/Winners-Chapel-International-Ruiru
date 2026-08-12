@@ -199,7 +199,10 @@
   .msg.err{background:#F6DEDE;color:var(--danger);}
 
   /* TESTIMONY MARQUEE */
-  .testimony-marquee{margin-top:26px;background:#FBF1F1;border-radius:12px;padding:16px 0;overflow:hidden;position:relative;}
+  .testimony-marquee{margin:26px -40px 0 -40px;background:#FBF1F1;border-radius:0;padding:16px 0;overflow:hidden;position:relative;}
+  @media(max-width:640px){
+    .testimony-marquee{margin:26px -16px 0 -16px;}
+  }
   .testimony-marquee .tm-label{position:relative;text-align:center;font-size:11px;letter-spacing:0.16em;text-transform:uppercase;color:var(--royal);font-weight:bold;margin-bottom:10px;}
   .testimony-track-wrap{overflow:hidden;width:100%;}
   .testimony-track{display:flex;width:max-content;animation:testimonyLR 40s linear infinite;}
