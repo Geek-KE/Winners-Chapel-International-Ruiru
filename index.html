@@ -402,13 +402,15 @@ async function dbUpdateVisitorPrayer(id, patch){
 async function dbDeleteVisitorPrayer(id){
   const patch = { prayer:null, prayerStatus:'pending', prayed:false, prayedBy:null, prayedAt:null };
   if(supabaseClient){
-    const { error } = await supabaseClient.from('visitors').update({ prayer:null, prayer_status:'pending', prayed:false, prayed_by:null, prayed_at:null }).eq('id',id);
-    if(error) console.error('delete visitor prayer failed', error);
-    return;
+    const { data, error } = await supabaseClient.from('visitors').update({ prayer:null, prayer_status:'pending', prayed:false, prayed_by:null, prayed_at:null }).eq('id',id).select();
+    if(error){ console.error('delete visitor prayer failed', error); return { ok:false, error }; }
+    if(!data || !data.length){ return { ok:false, error:{message:'No row was updated. It may be blocked by a database permission (RLS) policy.'} }; }
+    return { ok:true };
   }
   const rows = await localAll('visitors');
   const v = rows.find(r=>r.id===id);
   if(v){ Object.assign(v, patch); await localSet('visitors', rows); }
+  return { ok:true };
 }
 
 /* ---------- FOLLOW UPS ---------- */
@@ -2291,7 +2293,11 @@ async function deletePrayerRequest(id){
   const visitors = await dbGetVisitors();
   const v = visitors.find(x=>x.id===id);
   if(!confirm('Delete this prayer request permanently? This cannot be undone.')) return;
-  await dbDeleteVisitorPrayer(id);
+  const result = await dbDeleteVisitorPrayer(id);
+  if(!result || !result.ok){
+    alert('Could not delete this prayer request. ' + (result && result.error && result.error.message ? result.error.message : 'Please check the Supabase table permissions for the visitors table and try again.'));
+    return;
+  }
   await logActivity('delete_prayer_request', `Deleted a confidential prayer request (${id})${v && v.prayerStatus==='approved' ? ' that had already been approved' : ''}`);
   renderAdmin(document.getElementById('main'));
 }
